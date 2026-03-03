@@ -80,7 +80,7 @@ const Dashboard = () => {
     },
     {
       title: 'Saldo en Caja',
-      value: '$12,450',
+      value: '$8,0',
       color: 'bg-[#ccfbf1]',
       icon: PiggyBank
     }
