@@ -43,15 +43,23 @@ const envSchema = z.object({
     .default('3000'),
 
   // ---------------------------------------------------------------------------
-  // BASE DE DATOS
+  // BASE DE DATOS — SUPABASE
   // ---------------------------------------------------------------------------
-  MONGODB_URI: z
+  SUPABASE_URL: z
     .string()
-    .min(1, 'MONGODB_URI es requerida')
+    .url('SUPABASE_URL debe ser una URL válida')
     .refine(
-      val => val.startsWith('mongodb://') || val.startsWith('mongodb+srv://'),
-      'MONGODB_URI debe comenzar con mongodb:// o mongodb+srv://'
+      val => val.includes('.supabase.co'),
+      'SUPABASE_URL debe ser una URL de Supabase'
     ),
+
+  SUPABASE_SERVICE_ROLE_KEY: z
+    .string()
+    .min(32, 'SUPABASE_SERVICE_ROLE_KEY es requerida'),
+
+  SUPABASE_ANON_KEY: z
+    .string()
+    .min(32, 'SUPABASE_ANON_KEY es requerida'),
 
   // ---------------------------------------------------------------------------
   // JWT (Autenticación)
@@ -140,7 +148,7 @@ const envSchema = z.object({
 const validation = envSchema.safeParse(process.env);
 
 if (!validation.success) {
-  console.error('❌ ERROR DE VALIDACIÓN DE VARIABLES DE ENTORNO:');
+  console.error('ERROR DE VALIDACIÓN DE VARIABLES DE ENTORNO:');
   console.error('─────────────────────────────────────────────────────');
   
   // Mostrar cada error de validación de forma clara
@@ -149,9 +157,9 @@ if (!validation.success) {
   });
   
   console.error('─────────────────────────────────────────────────────');
-  console.error('📝 Revisa tu archivo .env y asegúrate de que todas');
+  console.error('Revisa tu archivo .env y asegúrate de que todas');
   console.error('   las variables estén configuradas correctamente.');
-  console.error('📄 Puedes usar .env.example como referencia.');
+  console.error('Puedes usar .env.example como referencia.');
   console.error('─────────────────────────────────────────────────────');
   
   // Salir del proceso con código de error
@@ -184,8 +192,8 @@ export const isTest = env.NODE_ENV === 'test';
 
 // Log de confirmación (solo en desarrollo)
 if (isDevelopment) {
-  console.log('✅ Variables de entorno validadas correctamente');
-  console.log(`🚀 Servidor configurado para: ${env.NODE_ENV}`);
-  console.log(`📡 Puerto: ${env.PORT}`);
-  console.log(`🗄️  MongoDB: ${env.MONGODB_URI}`);
+  console.log('Variables de entorno validadas correctamente');
+  console.log(`Servidor configurado para: ${env.NODE_ENV}`);
+  console.log(`Puerto: ${env.PORT}`);
+  console.log(`Supabase: ${env.SUPABASE_URL}`);
 }
