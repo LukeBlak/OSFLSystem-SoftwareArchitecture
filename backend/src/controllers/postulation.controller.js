@@ -1,6 +1,6 @@
-﻿import * as postulationService from '../services/postulation.service.js';
-import { ApiResponse } from '../utils/apiResponse.js';
-import { ApiError } from '../utils/apiError.js';
+﻿import * as postulationService from '../../scr/services/postulation.service.js';
+import { ApiResponse } from '../../scr/utils/apiResponse.js';
+import { ApiError } from '../../scr/utils/apiError.js';
 
 export const createPostulation = async (req, res, next) => {
   try {

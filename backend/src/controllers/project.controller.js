@@ -1,6 +1,6 @@
-import * as projectService from '../services/project.service.js';
-import { ApiResponse } from '../utils/apiResponse.js';
-import { ApiError } from '../utils/apiError.js';
+import * as projectService from '../../scr/services/project.service.js';
+import { ApiResponse } from '../../scr/utils/apiResponse.js';
+import { ApiError } from '../../scr/utils/apiError.js';
 
 export const createProject = async (req, res, next) => {
   try {
@@ -44,7 +44,7 @@ export const assignCommittee = async (req, res, next) => {
     const { comiteId } = req.body;
     if (!comiteId) return next(new ApiError(400, 'comiteId es requerido'));
     const project = await projectService.assignCommittee(req.params.id, comiteId);
-    res.json(ApiResponse.success('Comité vinculado', project));
+    res.json(ApiResponse.success('Comitï¿½ vinculado', project));
   } catch (err) {
     next(err);
   }
