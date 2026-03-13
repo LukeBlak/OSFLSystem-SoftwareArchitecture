@@ -1,6 +1,6 @@
-import * as projectService from '../../scr/services/project.service.js';
-import { ApiResponse } from '../../scr/utils/apiResponse.js';
-import { ApiError } from '../../scr/utils/apiError.js';
+import * as projectService from '../services/project.service.js';
+import { ApiResponse } from '../utils/apiResponse.js';
+import { ApiError } from '../utils/apiError.js';
 
 export const createProject = async (req, res, next) => {
   try {

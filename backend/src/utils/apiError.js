@@ -1,21 +1,22 @@
 /**
  * =============================================================================
- * CLASE DE ERROR PERSONALIZADA PARA API
+ * CLASE DE ERROR PERSONALIZADA PARA API - UTILIDAD GLOBAL
  * =============================================================================
  * 
- * Propósito:
+ * Propósito (ADR-001):
  * - Proporcionar una clase de error estandarizada para toda la API
  * - Facilitar el manejo consistente de errores en la Capa de Presentación
  * - Permitir la propagación de errores con información estructurada
  * - Integrarse con el middleware errorHandler.middleware.js
+ * - Implementar patrón de errores operacionales vs no operacionales
  * 
  * Arquitectura:
  * - Capa: Utilidades (usada en Presentación y Aplicación)
- * - Patrón: Custom Error Class
+ * - Patrón: Custom Error Class + Factory Methods
+ * - Integración: http-status-codes, errorHandler.middleware.js
  * 
- * Casos de Uso relacionados:
- * - Todos los endpoints de la API
- * - Manejo de errores en controllers y services
+ * Librerías utilizadas:
+ * - http-status-codes: Constantes de códigos de estado HTTP
  * 
  * @module utils/apiError
  * @layer Utilities
@@ -23,570 +24,826 @@
 
 import { StatusCodes, getReasonPhrase } from 'http-status-codes';
 
+// =============================================================================
+// CLASE PRINCIPAL ApiError
+// =============================================================================
+
 /**
- * =============================================================================
- * CLASE ApiError
- * =============================================================================
+ * Clase base para todos los errores personalizados de la API
  * 
- * Clase base para todos los errores personalizados de la API.
  * Extiende la clase Error nativa de JavaScript para mantener compatibilidad
  * con el manejo de errores estándar de Node.js/Express.
  * 
+ * Proporciona:
+ * - Código de estado HTTP para respuestas
+ * - Código de error interno para identificación programática
+ * - Distinción entre errores operacionales y no operacionales
+ * - Información detallada para debugging
+ * - Serialización JSON para respuestas API
+ * 
  * @extends Error
+ * 
+ * @example
+ * // Uso básico
+ * throw new ApiError(400, 'Email inválido', { code: 'INVALID_EMAIL' });
+ * 
+ * @example
+ * // Con detalles adicionales
+ * throw new ApiError(409, 'Email ya registrado', {
+ *   code: 'EMAIL_EXISTS',
+ *   details: { email: 'usuario@ejemplo.com' }
+ * });
  */
 class ApiError extends Error {
-    /**
-     * ---------------------------------------------------------------------------
-     * CONSTRUCTOR
-     * ---------------------------------------------------------------------------
-     * 
-     * @param {number} statusCode - Código de estado HTTP (ej: 400, 401, 404, 500)
-     * @param {string} message - Mensaje descriptivo del error
-     * @param {Object} [options] - Opciones adicionales
-     * @param {string} [options.code] - Código de error interno (ej: 'VALIDATION_ERROR')
-     * @param {Object} [options.details] - Detalles adicionales del error
-     * @param {boolean} [options.isOperational] - Si es un error operacional (conocido)
-     * @param {string} [options.stack] - Stack trace personalizado
-     * 
-     * @example
-     * throw new ApiError(400, 'Email inválido', { code: 'INVALID_EMAIL' });
-     * 
-     * @example
-     * throw new ApiError(404, 'Usuario no encontrado', {
-     *   code: 'USER_NOT_FOUND',
-     *   details: { userId: '123' }
-     * });
-     */
-
-    constructor(
-        statusCode,
-        message,
-        {
-            code = 'INTERNAL_ERROR',
-            details = null,
-            isOperational = true,
-            stack = '',
-        } = {}
-    ) {
-        // Llamar al constructor de Error con el mensaje
-        super(message);
-
-        /**
-         * Código de estado HTTP
-         * @type {number}
-         * @public
-         * @example 400, 401, 403, 404, 500
-         */
-        this.statusCode = statusCode;
-
-        /**
-         * Mensaje del error
-         * @type {string}
-         * @public
-         */
-        this.message = message;
-
-        /**
-         * Código de error interno para identificación programática
-         * @type {string}
-         * @public
-         * @example 'VALIDATION_ERROR', 'UNAUTHORIZED', 'NOT_FOUND'
-         */
-        this.code = code;
-
-        /**
-         * Detalles adicionales del error (opcional)
-         * @type {Object|null}
-         * @public
-         * @example { field: 'email', reason: 'already_exists' }
-         */
-        this.details = details;
-
-        /**
-         * Indica si es un error operacional (conocido/manejable)
-         * Los errores operacionales son esperados y tienen mensaje seguro para el cliente
-         * Los errores no operacionales son fallos del sistema (bug, BD caída, etc.)
-         * 
-         * @type {boolean}
-         * @public
-         */
-        this.isOperational = isOperational;
-
-        /**
-         * Nombre del error para identificación en logs
-         * @type {string}
-         * @public
-         */
-        this.name = this.constructor.name;
-
-        /**
-         * Timestamp del error en formato ISO 8601
-         * @type {string}
-         * @public
-         */
-        this.timestamp = new Date().toISOString();
-
-        /**
-         * Path de la petición donde ocurrió el error (se setea en middleware)
-         * @type {string|null}
-         * @public
-         */
-        this.path = null;
-
-        /**
-         * Método HTTP de la petición donde ocurrió el error (se setea en middleware)
-         * @type {string|null}
-         * @public
-         */
-        this.method = null;
-
-        // Capturar stack trace
-        if (stack) {
-            this.stack = stack;
-        } else if (Error.captureStackTrace) {
-            // Capturar stack trace optimizado (excluye este constructor)
-            Error.captureStackTrace(this, this.constructor);
-        } else {
-            // Fallback para entornos sin captureStackTrace
-            this.stack = new Error(message).stack;
-        }
-    }
+  /**
+   * ---------------------------------------------------------------------------
+   * CONSTRUCTOR
+   * ---------------------------------------------------------------------------
+   * 
+   * @param {number} statusCode - Código de estado HTTP (ej: 400, 401, 404, 500)
+   * @param {string} message - Mensaje descriptivo del error
+   * @param {Object} [options] - Opciones adicionales
+   * @param {string} [options.code] - Código de error interno (ej: 'VALIDATION_ERROR')
+   * @param {Object} [options.details] - Detalles adicionales del error
+   * @param {boolean} [options.isOperational] - Si es un error operacional (conocido)
+   * @param {string} [options.stack] - Stack trace personalizado
+   * 
+   * @example
+   * throw new ApiError(400, 'Email inválido', { code: 'INVALID_EMAIL' });
+   * 
+   * @example
+   * throw new ApiError(404, 'Usuario no encontrado', {
+   *   code: 'USER_NOT_FOUND',
+   *   details: { userId: '123' }
+   * });
+   */
+  constructor(
+    statusCode,
+    message,
+    {
+      code = 'INTERNAL_ERROR',
+      details = null,
+      isOperational = true,
+      stack = '',
+    } = {}
+  ) {
+    // Llamar al constructor de Error con el mensaje
+    super(message);
 
     /**
-     * ---------------------------------------------------------------------------
-     * MÉTODO toJSON
-     * ---------------------------------------------------------------------------
+     * Código de estado HTTP
      * 
-     * Serializa el error a formato JSON para respuestas API.
-     * Se usa automáticamente cuando se hace JSON.stringify() del error.
+     * Define el código HTTP que se enviará en la respuesta al cliente.
      * 
-     * @returns {Object} Objeto JSON con información del error
+     * Categorías:
+     * - 4xx: Errores del cliente (validación, auth, permisos, etc.)
+     * - 5xx: Errores del servidor (BD, bugs, servicios externos, etc.)
      * 
-     * @example
-     * const error = new ApiError(400, 'Email inválido');
-     * console.log(JSON.stringify(error));
-     * // {"statusCode":400,"message":"Email inválido","code":"INTERNAL_ERROR",...}
+     * @type {number}
+     * @public
+     * @example 400, 401, 403, 404, 500
      */
-    toJSON() {
-        return {
-            statusCode: this.statusCode,
-            message: this.message,
-            code: this.code,
-            details: this.details,
-            timestamp: this.timestamp,
-            path: this.path,
-            method: this.method,
-            name: this.name,
-        };
-    }
+    this.statusCode = statusCode;
 
     /**
-     * ---------------------------------------------------------------------------
-     * MÉTODO toResponse
-     * ---------------------------------------------------------------------------
+     * Mensaje del error
      * 
-     * Genera un objeto de respuesta estandarizado para Express.
-     * Útil para enviar directamente en res.json().
+     * Mensaje descriptivo que puede mostrarse al usuario final.
+     * En producción, los mensajes de errores no operacionales se ocultan.
      * 
-     * @param {boolean} isDevelopment - Si estamos en entorno de desarrollo
-     * @returns {Object} Objeto de respuesta para Express
-     * 
-     * @example
-     * const error = new ApiError(400, 'Email inválido');
-     * res.status(error.statusCode).json(error.toResponse(true));
+     * @type {string}
+     * @public
      */
-    toResponse(isDevelopment = false) {
-        const response = {
-            success: false,
-            error: {
-                code: this.code,
-                message: this.message,
-                statusCode: this.statusCode,
-                timestamp: this.timestamp,
-            },
-        };
-
-        // Incluir detalles solo si existen
-        if (this.details) {
-            response.error.details = this.details;
-        }
-
-        // Incluir path y method si están disponibles
-        if (this.path) {
-            response.error.path = this.path;
-        }
-
-        if (this.method) {
-            response.error.method = this.method;
-        }
-
-        // Incluir stack trace solo en desarrollo (nunca en producción)
-        if (isDevelopment && this.stack) {
-            response.error.stack = this.stack.split('\n').slice(0, 10);
-        }
-
-        return response;
-    }
+    this.message = message;
 
     /**
-     * ---------------------------------------------------------------------------
-     * MÉTODO estático badRequest
-     * ---------------------------------------------------------------------------
+     * Código de error interno para identificación programática
      * 
-     * Factory method para crear errores 400 Bad Request.
+     * Permite al frontend identificar el tipo de error sin depender del mensaje.
+     * Útil para mostrar mensajes traducidos o tomar acciones específicas.
      * 
-     * @param {string} message - Mensaje del error
-     * @param {Object} [details] - Detalles adicionales
-     * @returns {ApiError} Error ApiError con statusCode 400
-     * 
-     * @example
-     * throw ApiError.badRequest('Email es requerido');
-     * throw ApiError.badRequest('Datos inválidos', { field: 'email' });
+     * @type {string}
+     * @public
+     * @example 'VALIDATION_ERROR', 'UNAUTHORIZED', 'NOT_FOUND'
      */
-
-    static badRequest(message, details = null) {
-        return new ApiError(StatusCodes.BAD_REQUEST, message, {
-            code: 'BAD_REQUEST',
-            details,
-        });
-    }
+    this.code = code;
 
     /**
-     * ---------------------------------------------------------------------------
-     * MÉTODO estático unauthorized
-     * ---------------------------------------------------------------------------
+     * Detalles adicionales del error (opcional)
      * 
-     * Factory method para crear errores 401 Unauthorized.
+     * Información específica del error que puede ayudar al debugging
+     * o proporcionar contexto adicional al frontend.
      * 
-     * @param {string} message - Mensaje del error
-     * @param {Object} [details] - Detalles adicionales
-     * @returns {ApiError} Error ApiError con statusCode 401
-     * 
-     * @example
-     * throw ApiError.unauthorized('Token inválido');
-     * throw ApiError.unauthorized('Credenciales incorrectas');
+     * @type {Object|null}
+     * @public
+     * @example { field: 'email', reason: 'already_exists' }
      */
-
-    static unauthorized(message, details = null) {
-        return new ApiError(StatusCodes.UNAUTHORIZED, message, {
-            code: 'UNAUTHORIZED',
-            details,
-        });
-    }
+    this.details = details;
 
     /**
-     * ---------------------------------------------------------------------------
-     * MÉTODO estático forbidden
-     * ---------------------------------------------------------------------------
+     * Indica si es un error operacional (conocido/manejable)
      * 
-     * Factory method para crear errores 403 Forbidden.
+     * Los errores operacionales son esperados y tienen mensaje seguro para el cliente.
+     * Ejemplos: validación fallida, recurso no encontrado, credenciales inválidas.
      * 
-     * @param {string} message - Mensaje del error
-     * @param {Object} [details] - Detalles adicionales
-     * @returns {ApiError} Error ApiError con statusCode 403
+     * Los errores no operacionales son fallos del sistema (bug, BD caída, etc.)
+     * y requieren mensajes genéricos para no exponer información interna.
      * 
-     * @example
-     * throw ApiError.forbidden('No tienes permisos para esta acción');
-     * throw ApiError.forbidden('Acceso denegado a este recurso');
+     * @type {boolean}
+     * @public
      */
-
-    static forbidden(message, details = null) {
-        return new ApiError(StatusCodes.FORBIDDEN, message, {
-            code: 'FORBIDDEN',
-            details,
-        });
-    }
+    this.isOperational = isOperational;
 
     /**
-     * ---------------------------------------------------------------------------
-     * MÉTODO estático notFound
-     * ---------------------------------------------------------------------------
+     * Nombre del error para identificación en logs
      * 
-     * Factory method para crear errores 404 Not Found.
-     * 
-     * @param {string} message - Mensaje del error
-     * @param {Object} [details] - Detalles adicionales
-     * @returns {ApiError} Error ApiError con statusCode 404
-     * 
-     * @example
-     * throw ApiError.notFound('Usuario no encontrado');
-     * throw ApiError.notFound('Recurso no existe', { resourceId: '123' });
+     * @type {string}
+     * @public
      */
-    static notFound(message, details = null) {
-        return new ApiError(StatusCodes.NOT_FOUND, message, {
-            code: 'NOT_FOUND',
-            details,
-        });
-    }
+    this.name = this.constructor.name;
 
     /**
-     * ---------------------------------------------------------------------------
-     * MÉTODO estático conflict
-     * ---------------------------------------------------------------------------
+     * Timestamp del error en formato ISO 8601
      * 
-     * Factory method para crear errores 409 Conflict.
+     * Útil para correlacionar errores en logs y debugging.
      * 
-     * @param {string} message - Mensaje del error
-     * @param {Object} [details] - Detalles adicionales
-     * @returns {ApiError} Error ApiError con statusCode 409
-     * 
-     * @example
-     * throw ApiError.conflict('El email ya está registrado');
-     * throw ApiError.conflict('Recurso ya existe');
+     * @type {string}
+     * @public
      */
-    static conflict(message, details = null) {
-        return new ApiError(StatusCodes.CONFLICT, message, {
-            code: 'CONFLICT',
-            details,
-        });
-    }
+    this.timestamp = new Date().toISOString();
 
     /**
-     * ---------------------------------------------------------------------------
-     * MÉTODO estático tooManyRequests
-     * ---------------------------------------------------------------------------
+     * Path de la petición donde ocurrió el error (se setea en middleware)
      * 
-     * Factory method para crear errores 429 Too Many Requests.
-     * 
-     * @param {string} message - Mensaje del error
-     * @param {Object} [details] - Detalles adicionales
-     * @returns {ApiError} Error ApiError con statusCode 429
-     * 
-     * @example
-     * throw ApiError.tooManyRequests('Demasiadas peticiones');
+     * @type {string|null}
+     * @public
      */
-
-    static tooManyRequests(message, details = null) {
-        return new ApiError(StatusCodes.TOO_MANY_REQUESTS, message, {
-            code: 'RATE_LIMIT_EXCEEDED',
-            details,
-        });
-    }
+    this.path = null;
 
     /**
-     * ---------------------------------------------------------------------------
-     * MÉTODO estático internal
-     * ---------------------------------------------------------------------------
+     * Método HTTP de la petición donde ocurrió el error (se setea en middleware)
      * 
-     * Factory method para crear errores 500 Internal Server Error.
-     * Por defecto isOperational = false (error no operacional = fallo del sistema)
-     * 
-     * @param {string} message - Mensaje del error
-     * @param {Object} [options] - Opciones adicionales
-     * @param {boolean} [options.isOperational] - Si es operacional (default: false)
-     * @param {Object} [options.details] - Detalles adicionales
-     * @returns {ApiError} Error ApiError con statusCode 500
-     * 
-     * @example
-     * throw ApiError.internal('Error en la base de datos');
-     * throw ApiError.internal('Servicio externo no disponible', { isOperational: true });
+     * @type {string|null}
+     * @public
      */
-
-    static internal(message, { isOperational = false, details = null } = {}) {
-        return new ApiError(StatusCodes.INTERNAL_SERVER_ERROR, message, {
-            code: 'INTERNAL_ERROR',
-            isOperational,
-            details,
-        });
-    }
+    this.method = null;
 
     /**
-     * ---------------------------------------------------------------------------
-     * MÉTODO estático serviceUnavailable
-     * ---------------------------------------------------------------------------
+     * ID único de la petición (se setea en middleware)
      * 
-     * Factory method para crear errores 503 Service Unavailable.
+     * Permite correlacionar errores con logs específicos de una petición.
      * 
-     * @param {string} message - Mensaje del error
-     * @param {Object} [details] - Detalles adicionales
-     * @returns {ApiError} Error ApiError con statusCode 503
-     * 
-     * @example
-     * throw ApiError.serviceUnavailable('Servicio temporalmente no disponible');
+     * @type {string|null}
+     * @public
      */
+    this.requestId = null;
 
-    static serviceUnavailable(message, details = null) {
-        return new ApiError(StatusCodes.SERVICE_UNAVAILABLE, message, {
-            code: 'SERVICE_UNAVAILABLE',
-            details,
-        });
+    // Capturar stack trace
+    if (stack) {
+      this.stack = stack;
+    } else if (Error.captureStackTrace) {
+      // Capturar stack trace optimizado (excluye este constructor)
+      Error.captureStackTrace(this, this.constructor);
+    } else {
+      // Fallback para entornos sin captureStackTrace
+      this.stack = new Error(message).stack;
+    }
+  }
+
+  /**
+   * ---------------------------------------------------------------------------
+   * MÉTODO toJSON
+   * ---------------------------------------------------------------------------
+   * 
+   * Serializa el error a formato JSON para respuestas API.
+   * Se usa automáticamente cuando se hace JSON.stringify() del error.
+   * 
+   * @returns {Object} Objeto JSON con información del error
+   * 
+   * @example
+   * const error = new ApiError(400, 'Email inválido');
+   * console.log(JSON.stringify(error));
+   * // {"statusCode":400,"message":"Email inválido","code":"INTERNAL_ERROR",...}
+   */
+  toJSON() {
+    return {
+      statusCode: this.statusCode,
+      message: this.message,
+      code: this.code,
+      details: this.details,
+      timestamp: this.timestamp,
+      path: this.path,
+      method: this.method,
+      requestId: this.requestId,
+      name: this.name,
+    };
+  }
+
+  /**
+   * ---------------------------------------------------------------------------
+   * MÉTODO toResponse
+   * ---------------------------------------------------------------------------
+   * 
+   * Genera un objeto de respuesta estandarizado para Express.
+   * Útil para enviar directamente en res.json().
+   * 
+   * @param {boolean} isDevelopment - Si estamos en entorno de desarrollo
+   * @returns {Object} Objeto de respuesta para Express
+   * 
+   * @example
+   * const error = new ApiError(400, 'Email inválido');
+   * res.status(error.statusCode).json(error.toResponse(true));
+   */
+  toResponse(isDevelopment = false) {
+    const response = {
+      success: false,
+      error: {
+        code: this.code,
+        message: this.message,
+        statusCode: this.statusCode,
+        timestamp: this.timestamp,
+      },
+    };
+
+    // Incluir detalles solo si existen
+    if (this.details) {
+      response.error.details = this.details;
     }
 
-    /**
-     * ---------------------------------------------------------------------------
-     * MÉTODO estático validation
-     * ---------------------------------------------------------------------------
-     * 
-     * Factory method específico para errores de validación (Zod, Joi, etc.).
-     * 
-     * @param {string} message - Mensaje del error
-     * @param {Array} [errors] - Array de errores de validación detallados
-     * @returns {ApiError} Error ApiError con statusCode 400
-     * 
-     * @example
-     * throw ApiError.validation('Datos inválidos', [
-     *   { field: 'email', message: 'Email inválido' },
-     *   { field: 'password', message: 'Mínimo 8 caracteres' }
-     * ]);
-     */
-
-    static validation(message, errors = null) {
-        return new ApiError(StatusCodes.BAD_REQUEST, message, {
-            code: 'VALIDATION_ERROR',
-            details: errors ? { errors } : null,
-        });
+    // Incluir path y method si están disponibles
+    if (this.path) {
+      response.error.path = this.path;
     }
 
-    /**
-     * ---------------------------------------------------------------------------
-     * MÉTODO estático database
-     * ---------------------------------------------------------------------------
-     * 
-     * Factory method específico para errores de base de datos.
-     * Por defecto isOperational = false (error de sistema)
-     * 
-     * @param {string} message - Mensaje del error
-     * @param {Object} [originalError] - Error original de la BD
-     * @returns {ApiError} Error ApiError con statusCode 500
-     * 
-     * @example
-     * throw ApiError.database('Error al guardar usuario', originalError);
-     */
-    
-    static database(message, originalError = null) {
-        return new ApiError(StatusCodes.INTERNAL_SERVER_ERROR, message, {
-            code: 'DATABASE_ERROR',
-            isOperational: false,
-            details: originalError ? { originalError: originalError.message } : null,
-        });
+    if (this.method) {
+      response.error.method = this.method;
     }
 
-    /**
-     * ---------------------------------------------------------------------------
-     * MÉTODO estático externalService
-     * ---------------------------------------------------------------------------
-     * 
-     * Factory method para errores de servicios externos (Cloudinary, Email, etc.).
-     * 
-     * @param {string} serviceName - Nombre del servicio externo
-     * @param {string} message - Mensaje del error
-     * @param {Object} [originalError] - Error original del servicio
-     * @returns {ApiError} Error ApiError con statusCode 503
-     * 
-     * @example
-     * throw ApiError.externalService('Cloudinary', 'Error al subir imagen', error);
-     * throw ApiError.externalService('SendGrid', 'Error al enviar email', error);
-     */
-    static externalService(serviceName, message, originalError = null) {
-        return new ApiError(StatusCodes.SERVICE_UNAVAILABLE, message, {
-            code: 'EXTERNAL_SERVICE_ERROR',
-            isOperational: true,
-            details: {
-                serviceName,
-                originalError: originalError ? originalError.message : null,
-            },
-        });
+    // Incluir requestId si está disponible
+    if (this.requestId) {
+      response.error.requestId = this.requestId;
     }
+
+    // Incluir stack trace solo en desarrollo (nunca en producción)
+    if (isDevelopment && this.stack) {
+      response.error.stack = this.stack.split('\n').slice(0, 10);
+    }
+
+    return response;
+  }
+
+  // =============================================================================
+  // FACTORY METHODS - MÉTODOS ESTÁTICOS PARA CREAR ERRORES
+  // =============================================================================
+
+  /**
+   * ---------------------------------------------------------------------------
+   * MÉTODO estático badRequest
+   * ---------------------------------------------------------------------------
+   * 
+   * Factory method para crear errores 400 Bad Request.
+   * 
+   * Se usa cuando los datos de entrada son inválidos o faltan campos requeridos.
+   * 
+   * @param {string} message - Mensaje del error
+   * @param {Object} [details] - Detalles adicionales
+   * @returns {ApiError} Error ApiError con statusCode 400
+   * 
+   * @example
+   * throw ApiError.badRequest('Email es requerido');
+   * throw ApiError.badRequest('Datos inválidos', { field: 'email' });
+   */
+  static badRequest(message, details = null) {
+    return new ApiError(StatusCodes.BAD_REQUEST, message, {
+      code: 'BAD_REQUEST',
+      details,
+    });
+  }
+
+  /**
+   * ---------------------------------------------------------------------------
+   * MÉTODO estático unauthorized
+   * ---------------------------------------------------------------------------
+   * 
+   * Factory method para crear errores 401 Unauthorized.
+   * 
+   * Se usa cuando el usuario no está autenticado o las credenciales son inválidas.
+   * 
+   * @param {string} message - Mensaje del error
+   * @param {Object} [details] - Detalles adicionales
+   * @returns {ApiError} Error ApiError con statusCode 401
+   * 
+   * @example
+   * throw ApiError.unauthorized('Token inválido');
+   * throw ApiError.unauthorized('Credenciales incorrectas');
+   */
+  static unauthorized(message, details = null) {
+    return new ApiError(StatusCodes.UNAUTHORIZED, message, {
+      code: 'UNAUTHORIZED',
+      details,
+    });
+  }
+
+  /**
+   * ---------------------------------------------------------------------------
+   * MÉTODO estático forbidden
+   * ---------------------------------------------------------------------------
+   * 
+   * Factory method para crear errores 403 Forbidden.
+   * 
+   * Se usa cuando el usuario autenticado no tiene permisos para una acción.
+   * 
+   * @param {string} message - Mensaje del error
+   * @param {Object} [details] - Detalles adicionales
+   * @returns {ApiError} Error ApiError con statusCode 403
+   * 
+   * @example
+   * throw ApiError.forbidden('No tienes permisos para esta acción');
+   * throw ApiError.forbidden('Acceso denegado a este recurso');
+   */
+  static forbidden(message, details = null) {
+    return new ApiError(StatusCodes.FORBIDDEN, message, {
+      code: 'FORBIDDEN',
+      details,
+    });
+  }
+
+  /**
+   * ---------------------------------------------------------------------------
+   * MÉTODO estático notFound
+   * ---------------------------------------------------------------------------
+   * 
+   * Factory method para crear errores 404 Not Found.
+   * 
+   * Se usa cuando un recurso solicitado no existe.
+   * 
+   * @param {string} message - Mensaje del error
+   * @param {Object} [details] - Detalles adicionales
+   * @returns {ApiError} Error ApiError con statusCode 404
+   * 
+   * @example
+   * throw ApiError.notFound('Usuario no encontrado');
+   * throw ApiError.notFound('Recurso no existe', { resourceId: '123' });
+   */
+  static notFound(message, details = null) {
+    return new ApiError(StatusCodes.NOT_FOUND, message, {
+      code: 'NOT_FOUND',
+      details,
+    });
+  }
+
+  /**
+   * ---------------------------------------------------------------------------
+   * MÉTODO estático conflict
+   * ---------------------------------------------------------------------------
+   * 
+   * Factory method para crear errores 409 Conflict.
+   * 
+   * Se usa cuando hay un conflicto con el estado actual del recurso
+   * (ej: email duplicado, violación de unicidad).
+   * 
+   * @param {string} message - Mensaje del error
+   * @param {Object} [details] - Detalles adicionales
+   * @returns {ApiError} Error ApiError con statusCode 409
+   * 
+   * @example
+   * throw ApiError.conflict('El email ya está registrado');
+   * throw ApiError.conflict('Recurso ya existe');
+   */
+  static conflict(message, details = null) {
+    return new ApiError(StatusCodes.CONFLICT, message, {
+      code: 'CONFLICT',
+      details,
+    });
+  }
+
+  /**
+   * ---------------------------------------------------------------------------
+   * MÉTODO estático tooManyRequests
+   * ---------------------------------------------------------------------------
+   * 
+   * Factory method para crear errores 429 Too Many Requests.
+   * 
+   * Se usa cuando se excede el límite de peticiones (rate limiting).
+   * 
+   * @param {string} message - Mensaje del error
+   * @param {Object} [details] - Detalles adicionales
+   * @returns {ApiError} Error ApiError con statusCode 429
+   * 
+   * @example
+   * throw ApiError.tooManyRequests('Demasiadas peticiones');
+   */
+  static tooManyRequests(message, details = null) {
+    return new ApiError(StatusCodes.TOO_MANY_REQUESTS, message, {
+      code: 'RATE_LIMIT_EXCEEDED',
+      details,
+    });
+  }
+
+  /**
+   * ---------------------------------------------------------------------------
+   * MÉTODO estático internal
+   * ---------------------------------------------------------------------------
+   * 
+   * Factory method para crear errores 500 Internal Server Error.
+   * 
+   * Por defecto isOperational = false (error no operacional = fallo del sistema)
+   * 
+   * @param {string} message - Mensaje del error
+   * @param {Object} [options] - Opciones adicionales
+   * @param {boolean} [options.isOperational] - Si es operacional (default: false)
+   * @param {Object} [options.details] - Detalles adicionales
+   * @returns {ApiError} Error ApiError con statusCode 500
+   * 
+   * @example
+   * throw ApiError.internal('Error en la base de datos');
+   * throw ApiError.internal('Servicio externo no disponible', { isOperational: true });
+   */
+  static internal(message, { isOperational = false, details = null } = {}) {
+    return new ApiError(StatusCodes.INTERNAL_SERVER_ERROR, message, {
+      code: 'INTERNAL_ERROR',
+      isOperational,
+      details,
+    });
+  }
+
+  /**
+   * ---------------------------------------------------------------------------
+   * MÉTODO estático serviceUnavailable
+   * ---------------------------------------------------------------------------
+   * 
+   * Factory method para crear errores 503 Service Unavailable.
+   * 
+   * Se usa cuando un servicio externo no está disponible.
+   * 
+   * @param {string} message - Mensaje del error
+   * @param {Object} [details] - Detalles adicionales
+   * @returns {ApiError} Error ApiError con statusCode 503
+   * 
+   * @example
+   * throw ApiError.serviceUnavailable('Servicio temporalmente no disponible');
+   */
+  static serviceUnavailable(message, details = null) {
+    return new ApiError(StatusCodes.SERVICE_UNAVAILABLE, message, {
+      code: 'SERVICE_UNAVAILABLE',
+      details,
+    });
+  }
+
+  /**
+   * ---------------------------------------------------------------------------
+   * MÉTODO estático validation
+   * ---------------------------------------------------------------------------
+   * 
+   * Factory method específico para errores de validación (Zod, Joi, etc.).
+   * 
+   * @param {string} message - Mensaje del error
+   * @param {Array} [errors] - Array de errores de validación detallados
+   * @returns {ApiError} Error ApiError con statusCode 400
+   * 
+   * @example
+   * throw ApiError.validation('Datos inválidos', [
+   *   { field: 'email', message: 'Email inválido' },
+   *   { field: 'password', message: 'Mínimo 8 caracteres' }
+   * ]);
+   */
+  static validation(message, errors = null) {
+    return new ApiError(StatusCodes.BAD_REQUEST, message, {
+      code: 'VALIDATION_ERROR',
+      details: errors ? { errors } : null,
+    });
+  }
+
+  /**
+   * ---------------------------------------------------------------------------
+   * MÉTODO estático database
+   * ---------------------------------------------------------------------------
+   * 
+   * Factory method específico para errores de base de datos.
+   * Por defecto isOperational = false (error de sistema)
+   * 
+   * @param {string} message - Mensaje del error
+   * @param {Object} [originalError] - Error original de la BD
+   * @returns {ApiError} Error ApiError con statusCode 500
+   * 
+   * @example
+   * throw ApiError.database('Error al guardar usuario', originalError);
+   */
+  static database(message, originalError = null) {
+    return new ApiError(StatusCodes.INTERNAL_SERVER_ERROR, message, {
+      code: 'DATABASE_ERROR',
+      isOperational: false,
+      details: originalError ? { originalError: originalError.message } : null,
+    });
+  }
+
+  /**
+   * ---------------------------------------------------------------------------
+   * MÉTODO estático externalService
+   * ---------------------------------------------------------------------------
+   * 
+   * Factory method para errores de servicios externos (Cloudinary, Email, etc.).
+   * 
+   * @param {string} serviceName - Nombre del servicio externo
+   * @param {string} message - Mensaje del error
+   * @param {Object} [originalError] - Error original del servicio
+   * @returns {ApiError} Error ApiError con statusCode 503
+   * 
+   * @example
+   * throw ApiError.externalService('Cloudinary', 'Error al subir imagen', error);
+   * throw ApiError.externalService('SendGrid', 'Error al enviar email', error);
+   */
+  static externalService(serviceName, message, originalError = null) {
+    return new ApiError(StatusCodes.SERVICE_UNAVAILABLE, message, {
+      code: 'EXTERNAL_SERVICE_ERROR',
+      isOperational: true,
+      details: {
+        serviceName,
+        originalError: originalError ? originalError.message : null,
+      },
+    });
+  }
+
+  /**
+   * ---------------------------------------------------------------------------
+   * MÉTODO estático unsupportedMediaType
+   * ---------------------------------------------------------------------------
+   * 
+   * Factory method para crear errores 415 Unsupported Media Type.
+   * 
+   * Se usa cuando el Content-Type de la petición no es soportado.
+   * 
+   * @param {string} message - Mensaje del error
+   * @param {Object} [details] - Detalles adicionales
+   * @returns {ApiError} Error ApiError con statusCode 415
+   */
+  static unsupportedMediaType(message, details = null) {
+    return new ApiError(StatusCodes.UNSUPPORTED_MEDIA_TYPE, message, {
+      code: 'UNSUPPORTED_MEDIA_TYPE',
+      details,
+    });
+  }
+
+  /**
+   * ---------------------------------------------------------------------------
+   * MÉTODO estático payloadTooLarge
+   * ---------------------------------------------------------------------------
+   * 
+   * Factory method para crear errores 413 Payload Too Large.
+   * 
+   * Se usa cuando el archivo subido excede el tamaño máximo permitido.
+   * 
+   * @param {string} message - Mensaje del error
+   * @param {Object} [details] - Detalles adicionales
+   * @returns {ApiError} Error ApiError con statusCode 413
+   */
+  static payloadTooLarge(message, details = null) {
+    return new ApiError(StatusCodes.PAYLOAD_TOO_LARGE, message, {
+      code: 'PAYLOAD_TOO_LARGE',
+      details,
+    });
+  }
+
+  /**
+   * ---------------------------------------------------------------------------
+   * MÉTODO estático requestTimeout
+   * ---------------------------------------------------------------------------
+   * 
+   * Factory method para crear errores 408 Request Timeout.
+   * 
+   * Se usa cuando la petición excede el tiempo límite.
+   * 
+   * @param {string} message - Mensaje del error
+   * @param {Object} [details] - Detalles adicionales
+   * @returns {ApiError} Error ApiError con statusCode 408
+   */
+  static requestTimeout(message, details = null) {
+    return new ApiError(StatusCodes.REQUEST_TIMEOUT, message, {
+      code: 'REQUEST_TIMEOUT',
+      details,
+    });
+  }
 }
 
-/**
- * =============================================================================
- * CLASES DE ERROR ESPECIALIZADAS (OPCIONAL)
- * =============================================================================
- * 
- * Clases que extienden ApiError para tipos específicos de errores.
- * Útil para identificar rápidamente el tipo de error en catch blocks.
- */
+// =============================================================================
+// CLASES DE ERROR ESPECIALIZADAS (OPCIONAL)
+// =============================================================================
 
 /**
  * Error de Validación
+ * 
+ * Clase especializada para errores de validación de datos.
+ * Útil para identificar rápidamente este tipo de error en catch blocks.
+ * 
  * @extends ApiError
  */
 class ValidationError extends ApiError {
-    constructor(message, details = null) {
-        super(StatusCodes.BAD_REQUEST, message, {
-            code: 'VALIDATION_ERROR',
-            details,
-            isOperational: true,
-        });
-        this.name = 'ValidationError';
-    }
+  constructor(message, details = null) {
+    super(StatusCodes.BAD_REQUEST, message, {
+      code: 'VALIDATION_ERROR',
+      details,
+      isOperational: true,
+    });
+    this.name = 'ValidationError';
+  }
 }
 
 /**
  * Error de Autenticación
+ * 
+ * Clase especializada para errores de autenticación.
+ * 
  * @extends ApiError
  */
 class AuthenticationError extends ApiError {
-    constructor(message, details = null) {
-        super(StatusCodes.UNAUTHORIZED, message, {
-            code: 'AUTHENTICATION_ERROR',
-            details,
-            isOperational: true,
-        });
-        this.name = 'AuthenticationError';
-    }
+  constructor(message, details = null) {
+    super(StatusCodes.UNAUTHORIZED, message, {
+      code: 'AUTHENTICATION_ERROR',
+      details,
+      isOperational: true,
+    });
+    this.name = 'AuthenticationError';
+  }
 }
 
 /**
  * Error de Autorización
+ * 
+ * Clase especializada para errores de autorización/permisos.
+ * 
  * @extends ApiError
  */
 class AuthorizationError extends ApiError {
-    constructor(message, details = null) {
-        super(StatusCodes.FORBIDDEN, message, {
-            code: 'AUTHORIZATION_ERROR',
-            details,
-            isOperational: true,
-        });
-        this.name = 'AuthorizationError';
-    }
+  constructor(message, details = null) {
+    super(StatusCodes.FORBIDDEN, message, {
+      code: 'AUTHORIZATION_ERROR',
+      details,
+      isOperational: true,
+    });
+    this.name = 'AuthorizationError';
+  }
 }
 
 /**
  * Error de Recurso No Encontrado
+ * 
+ * Clase especializada para errores de recurso no encontrado.
+ * 
  * @extends ApiError
  */
 class NotFoundError extends ApiError {
-    constructor(message, details = null) {
-        super(StatusCodes.NOT_FOUND, message, {
-            code: 'NOT_FOUND_ERROR',
-            details,
-            isOperational: true,
-        });
-        this.name = 'NotFoundError';
-    }
+  constructor(message, details = null) {
+    super(StatusCodes.NOT_FOUND, message, {
+      code: 'NOT_FOUND_ERROR',
+      details,
+      isOperational: true,
+    });
+    this.name = 'NotFoundError';
+  }
 }
 
 /**
  * Error de Conflicto
+ * 
+ * Clase especializada para errores de conflicto de recursos.
+ * 
  * @extends ApiError
  */
 class ConflictError extends ApiError {
-    constructor(message, details = null) {
-        super(StatusCodes.CONFLICT, message, {
-            code: 'CONFLICT_ERROR',
-            details,
-            isOperational: true,
-        });
-        this.name = 'ConflictError';
-    }
+  constructor(message, details = null) {
+    super(StatusCodes.CONFLICT, message, {
+      code: 'CONFLICT_ERROR',
+      details,
+      isOperational: true,
+    });
+    this.name = 'ConflictError';
+  }
 }
 
 /**
- * =============================================================================
- * EXPORTACIÓN
- * =============================================================================
+ * Error de Base de Datos
  * 
+ * Clase especializada para errores de base de datos.
+ * 
+ * @extends ApiError
+ */
+class DatabaseError extends ApiError {
+  constructor(message, originalError = null) {
+    super(StatusCodes.INTERNAL_SERVER_ERROR, message, {
+      code: 'DATABASE_ERROR',
+      isOperational: false,
+      details: originalError ? { originalError: originalError.message } : null,
+    });
+    this.name = 'DatabaseError';
+    this.originalError = originalError;
+  }
+}
+
+/**
+ * Error de Servicio Externo
+ * 
+ * Clase especializada para errores de servicios externos.
+ * 
+ * @extends ApiError
+ */
+class ExternalServiceError extends ApiError {
+  constructor(serviceName, message, originalError = null) {
+    super(StatusCodes.SERVICE_UNAVAILABLE, message, {
+      code: 'EXTERNAL_SERVICE_ERROR',
+      isOperational: true,
+      details: {
+        serviceName,
+        originalError: originalError ? originalError.message : null,
+      },
+    });
+    this.name = 'ExternalServiceError';
+    this.serviceName = serviceName;
+  }
+}
+
+// =============================================================================
+// FUNCIONES DE UTILIDAD
+// =============================================================================
+
+/**
+ * Determina si un error es un ApiError
+ * 
+ * @param {Error} error - Error a verificar
+ * @returns {boolean} True si es un ApiError
+ * 
+ * @example
+ * if (isApiError(error)) {
+ *   // Manejar como ApiError
+ * }
+ */
+export const isApiError = (error) => {
+  return error instanceof ApiError;
+};
+
+/**
+ * Determina si un error es operacional
+ * 
+ * @param {Error} error - Error a verificar
+ * @returns {boolean} True si es operacional
+ */
+export const isOperationalError = (error) => {
+  return error instanceof ApiError && error.isOperational === true;
+};
+
+/**
+ * Obtiene el código de estado HTTP de un error
+ * 
+ * @param {Error} error - Error del cual extraer el código
+ * @returns {number} Código de estado HTTP (500 por defecto)
+ */
+export const getStatusCode = (error) => {
+  if (error instanceof ApiError) {
+    return error.statusCode;
+  }
+  return StatusCodes.INTERNAL_SERVER_ERROR;
+};
+
+/**
+ * Convierte cualquier error a ApiError
+ * 
+ * @param {Error} error - Error a convertir
+ * @param {string} [defaultMessage] - Mensaje por defecto si el error no tiene mensaje
+ * @returns {ApiError} Error convertido a ApiError
+ */
+export const toApiError = (error, defaultMessage = 'Error interno del servidor') => {
+  if (error instanceof ApiError) {
+    return error;
+  }
+
+  return ApiError.internal(
+    error.message || defaultMessage,
+    {
+      details: error.stack ? { stack: error.stack.split('\n').slice(0, 5) } : null,
+    }
+  );
+};
+
+// =============================================================================
+// EXPORTACIÓN POR DEFECTO
+// =============================================================================
+
+/**
  * Exporta la clase principal y las clases especializadas
  */
 export {
-    ApiError,
-    ValidationError,
-    AuthenticationError,
-    AuthorizationError,
-    NotFoundError,
-    ConflictError,
+  ApiError,
+  ValidationError,
+  AuthenticationError,
+  AuthorizationError,
+  NotFoundError,
+  ConflictError,
+  DatabaseError,
+  ExternalServiceError,
+  // Funciones de utilidad
+  isApiError,
+  isOperationalError,
+  getStatusCode,
+  toApiError,
 };
 
 // Exportación por defecto (clase principal)
