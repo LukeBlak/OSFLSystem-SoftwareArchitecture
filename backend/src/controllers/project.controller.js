@@ -4,7 +4,7 @@ import { ApiError } from '../utils/apiError.js';
 
 export const createProject = async (req, res, next) => {
   try {
-    const project = await projectService.createProject(req.body, req.user.organizacion_id);
+    const project = await projectService.createProject(req.supabase, req.body, req.user.organizationId);
     res.status(201).json(ApiResponse.success('Proyecto creado', project));
   } catch (err) {
     next(err);
@@ -13,7 +13,7 @@ export const createProject = async (req, res, next) => {
 
 export const getProjects = async (req, res, next) => {
   try {
-    const projects = await projectService.getProjects(req.query);
+    const projects = await projectService.getProjects(req.supabase, req.query);
     res.json(ApiResponse.success('Proyectos obtenidos', projects));
   } catch (err) {
     next(err);
@@ -22,7 +22,7 @@ export const getProjects = async (req, res, next) => {
 
 export const getProjectById = async (req, res, next) => {
   try {
-    const project = await projectService.getProjectById(req.params.id);
+    const project = await projectService.getProjectById(req.supabase, req.params.id);
     if (!project) return next(new ApiError(404, 'Proyecto no encontrado'));
     res.json(ApiResponse.success('Proyecto', project));
   } catch (err) {
@@ -32,7 +32,7 @@ export const getProjectById = async (req, res, next) => {
 
 export const updateProject = async (req, res, next) => {
   try {
-    const project = await projectService.updateProject(req.params.id, req.body);
+    const project = await projectService.updateProject(req.supabase, req.params.id, req.body);
     res.json(ApiResponse.success('Proyecto actualizado', project));
   } catch (err) {
     next(err);

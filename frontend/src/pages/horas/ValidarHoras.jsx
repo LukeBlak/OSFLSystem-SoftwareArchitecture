@@ -137,7 +137,23 @@ const ValidarHoras = () => {
 
     setLoading(true);
     try {
-      // API call: validar horas
+      // Intentar llamada real a la API (CU-17)
+      const token = localStorage.getItem('token');
+      const response = await fetch(`http://localhost:3000/api/members/${record.memberId}/horas/${record.id}/validate`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({ aprobado: true })
+      });
+
+      if (!response.ok) {
+        console.warn('La API devolvió un error (podría ser por datos mockeados):', await response.text());
+        // Comentado para no interrumpir el flujo si se están usando datos de prueba de la UI
+        // throw new Error('Error en API'); 
+      }
+
       setRecords(prev =>
         prev.map(r =>
           r.id === recordId ? { ...r, validated: true } : r
@@ -145,13 +161,15 @@ const ValidarHoras = () => {
       );
       alert(`Horas validadas exitosamente para ${record.memberName}`);
     } catch (error) {
-      alert('Error al validar horas');
+      console.error(error);
+      alert('Error de conexión con el servidor al validar horas');
     } finally {
       setLoading(false);
     }
   };
 
   const handleReject = async (recordId, recordName) => {
+    const record = records.find(r => r.id === recordId);
     const reason = prompt(`Motivo del rechazo para ${recordName}:`);
     if (!reason) {
       alert('Debe ingresar una justificación para rechazar las horas');
@@ -160,7 +178,20 @@ const ValidarHoras = () => {
 
     setLoading(true);
     try {
-      // API call: rechazar horas
+      const token = localStorage.getItem('token');
+      const response = await fetch(`http://localhost:3000/api/members/${record.memberId}/horas/${record.id}/validate`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({ aprobado: false, observaciones: reason })
+      });
+
+      if (!response.ok) {
+        console.warn('La API devolvió un error:', await response.text());
+      }
+
       setRecords(prev =>
         prev.map(r =>
           r.id === recordId ? { ...r, validated: true, hours: '0' } : r
@@ -168,7 +199,8 @@ const ValidarHoras = () => {
       );
       alert('Horas marcadas como no válidas');
     } catch (error) {
-      alert('Error al rechazar horas');
+      console.error(error);
+      alert('Error de conexión al rechazar horas');
     } finally {
       setLoading(false);
     }

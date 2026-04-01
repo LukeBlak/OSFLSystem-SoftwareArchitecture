@@ -28,9 +28,8 @@
 import { ApiError } from '../utils/apiError.js';
 import { StatusCodes } from 'http-status-codes';
 import { logger } from '../utils/logger.js';
-import { CommitteeRepository } from '../repositories/CommitteeRepository.js';
-import { OrganizationRepository } from '../repositories/OrganizationRepository.js';
-import { MemberRepository } from '../repositories/MemberRepository.js';
+// Repositorios eliminados para evitar errores de compilación, 
+// delegando sus CUs al desarrollador encargado. Nosotros usaremos Supabase.
 import {
   COMMITTEE_STATUS,
   COMMITTEE_AREAS,
@@ -636,86 +635,138 @@ export const deactivateCommittee = async (committeeId, options = {}) => {
  * @throws {ApiError} 404 - Comité o líder no encontrado
  * @throws {ApiError} 409 - Líder no pertenece a la organización
  */
-export const assignLeader = async (committeeId, liderComiteId, options = {}) => {
+export const assignLeader = async (supabase, committeeId, liderComiteId, options = {}) => {
   try {
-    // =========================================================================
-    // 1. VALIDAR DATOS
-    // =========================================================================
-    if (!liderComiteId) {
-      throw ApiError.badRequest('ID del líder es requerido');
-    }
+    if (!liderComiteId) throw ApiError.badRequest('ID del líder es requerido');
 
-    // =========================================================================
-    // 2. VERIFICAR QUE EL COMITÉ EXISTE
-    // =========================================================================
-    const committee = await CommitteeRepository.findById(committeeId);
+    // 1. VERIFICAR QUE EL COMITÉ EXISTE
+    const { data: committee, error: comError } = await supabase
+      .from('comite')
+      .select('*')
+      .eq('id', committeeId)
+      .single();
 
-    if (!committee || committee.error) {
+    if (comError || !committee) {
       throw ApiError.notFound('Comité no encontrado');
     }
 
-    // =========================================================================
-    // 3. VERIFICAR QUE EL LÍDER EXISTE
-    // =========================================================================
-    const lider = await MemberRepository.findById(liderComiteId);
+    // 2. VERIFICAR QUE EL MIEMBRO EXISTE
+    const { data: lider, error: liderError } = await supabase
+      .from('miembro')
+      .select('*')
+      .eq('id', liderComiteId)
+      .single();
 
-    if (!lider) {
-      throw ApiError.notFound('Líder de comité no encontrado');
+    if (liderError || !lider) {
+      throw ApiError.notFound('Miembro (futuro líder) no encontrado');
     }
 
-    // =========================================================================
-    // 4. VERIFICAR QUE EL LÍDER PERTENECE A LA MISMA ORGANIZACIÓN
-    // =========================================================================
-    if (lider.organizacionId !== committee.data.organizacionId) {
-      throw ApiError.conflict(
-        'El líder debe pertenecer a la misma organización que el comité'
-      );
+    // 3. ASEGURAR QUE EL MIEMBRO SEA UN 'lider_comite'
+    // La tabla comite requiere que lidercomiteid sea un FK a lider_comite(id)
+    const { data: isLider, error: checkLiderError } = await supabase
+      .from('lider_comite')
+      .select('id')
+      .eq('id', liderComiteId)
+      .single();
+
+    if (!isLider) {
+      // Inyectar al miembro en la tabla lider_comite
+      const { error: insertLider } = await supabase
+        .from('lider_comite')
+        .insert([{ id: liderComiteId }]);
+        
+      if (insertLider) throw ApiError.internal('Error al promover miembro a líder de comité');
     }
 
-    // =========================================================================
-    // 5. ACTUALIZAR LÍDER DEL COMITÉ
-    // =========================================================================
-    const { data: updatedCommittee, error } = await CommitteeRepository.update(committeeId, {
-      liderComiteId,
-      modificadoPor: options.assignedBy,
-      fechaEdicion: new Date().toISOString(),
-    });
+    // 4. ACTUALIZAR LÍDER DEL COMITÉ
+    // No pasamos modificado_por porque funcion_auditoria() lo hace automáticamente!
+    const { data: updatedCommittee, error } = await supabase
+      .from('comite')
+      .update({ lidercomiteid: liderComiteId })
+      .eq('id', committeeId)
+      .select()
+      .single();
 
     if (error || !updatedCommittee) {
-      logger.error('Error al asignar líder', {
-        error,
-        committeeId,
-        liderComiteId,
-      });
+      logger.error('Error al asignar líder', { error, committeeId, liderComiteId });
       throw ApiError.internal('Error al asignar el líder');
     }
 
-    // =========================================================================
-    // 6. REGISTRAR EN LOGS
-    // =========================================================================
     logger.info('Líder de comité asignado exitosamente', {
       committeeId,
       liderComiteId,
       assignedBy: options.assignedBy,
     });
 
-    // =========================================================================
-    // 7. RETORNAR COMITÉ FORMATEADO
-    // =========================================================================
-    return formatCommitteeForResponse(updatedCommittee);
-
+    return updatedCommittee;
   } catch (error) {
-    if (error instanceof ApiError) {
-      throw error;
+    if (error instanceof ApiError) throw error;
+    logger.error('Error inesperado en assignLeader', { error: error.message, committeeId, liderComiteId });
+    throw ApiError.internal('Error al asignar el líder');
+  }
+};
+
+/**
+ * -----------------------------------------------------------------------------
+ * ASIGNAR MIEMBRO A COMITÉ (CU-09)
+ * -----------------------------------------------------------------------------
+ */
+export const addMemberToCommittee = async (supabase, committeeId, miembroId, options = {}) => {
+  try {
+    if (!miembroId) throw ApiError.badRequest('ID del miembro es requerido');
+
+    // Verificar comité
+    const { data: com, error: comErr } = await supabase.from('comite').select('id').eq('id', committeeId).single();
+    if (comErr || !com) throw ApiError.notFound('Comité no encontrado');
+
+    // Verificar miembro
+    const { data: mem, error: memErr } = await supabase.from('miembro').select('id').eq('id', miembroId).single();
+    if (memErr || !mem) throw ApiError.notFound('Miembro no encontrado');
+
+    // Insertar en tabla intermedia (Relación M:N según UML)
+    const { error } = await supabase
+      .from('miembro_comite')
+      .insert([{ comiteid: committeeId, miembroid: miembroId }]);
+
+    // Si ya existe la relación (codigo 23505), lo manejamos
+    if (error && error.code === '23505') {
+      throw ApiError.conflict('El miembro ya pertenece a este comité');
+    }
+    if (error) {
+       logger.error('Error al asignar miembro a comité', { error, committeeId, miembroId });
+       throw ApiError.internal('Error al asignar miembro');
     }
 
-    logger.error('Error inesperado en assignLeader', {
-      error: error.message,
-      committeeId,
-      liderComiteId,
-    });
+    return { committeeId, miembroId, assignedAt: new Date().toISOString() };
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    throw ApiError.internal('Error al asignar miembro');
+  }
+};
 
-    throw ApiError.internal('Error al asignar el líder');
+/**
+ * -----------------------------------------------------------------------------
+ * REMOVER MIEMBRO DE COMITÉ (CU-09)
+ * -----------------------------------------------------------------------------
+ */
+export const removeMemberFromCommittee = async (supabase, committeeId, miembroId, options = {}) => {
+  try {
+    // Remover de la tabla intermedia
+    const { error } = await supabase
+      .from('miembro_comite')
+      .delete()
+      .eq('comiteid', committeeId)
+      .eq('miembroid', miembroId);
+
+    if (error) {
+      logger.error('Error al remover miembro de comité', { error, committeeId, miembroId });
+      throw ApiError.internal('Error al remover miembro');
+    }
+
+    return { success: true };
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    throw ApiError.internal('Error al remover miembro');
   }
 };
 

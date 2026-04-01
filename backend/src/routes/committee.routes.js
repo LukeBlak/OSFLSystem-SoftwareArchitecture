@@ -550,6 +550,34 @@ router.post(
 
 /**
  * -----------------------------------------------------------------------------
+ * ASIGNAR MIEMBRO A COMITÉ (CU-09)
+ * -----------------------------------------------------------------------------
+ * POST /api/committees/:id/members
+ */
+router.post(
+  '/:id/members',
+  canManageCommittees,
+  writeCommitteeLimiter,
+  validate(committeeIdSchema, { source: 'params' }),
+  committeeController.addMember
+);
+
+/**
+ * -----------------------------------------------------------------------------
+ * REMOVER MIEMBRO DE COMITÉ (CU-09)
+ * -----------------------------------------------------------------------------
+ * DELETE /api/committees/:id/members/:memberId
+ */
+router.delete(
+  '/:id/members/:memberId',
+  canManageCommittees,
+  writeCommitteeLimiter,
+  validate(committeeIdSchema, { source: 'params' }),
+  committeeController.removeMember
+);
+
+/**
+ * -----------------------------------------------------------------------------
  * OBTENER ESTADÍSTICAS DE COMITÉ
  * -----------------------------------------------------------------------------
  * 

@@ -332,9 +332,24 @@ export const authenticate = async (req, res, next) => {
       authenticatedAt: new Date().toISOString(),
       tokenScheme: 'Bearer',
     };
+    // =========================================================================
+    // 8. CREAR CLIENTE SUPABASE AUTENTICADO (RLS)
+    // =========================================================================
+    /**
+     * Instanciar un cliente Supabase específico para esta petición, forzando
+     * el envío del token JWT del usuario. Esto permite que Supabase aplique
+     * las políticas de seguridad por fila (RLS) automáticamente.
+     */
+    req.supabase = createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY, {
+      global: {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      }
+    });
 
     // =========================================================================
-    // 8. CONTINUAR CON LA CADENA DE MIDDLEWARE
+    // 9. CONTINUAR CON LA CADENA DE MIDDLEWARE
     // =========================================================================
     /**
      * El usuario ha sido autenticado exitosamente

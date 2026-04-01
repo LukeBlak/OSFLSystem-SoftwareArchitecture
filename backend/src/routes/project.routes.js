@@ -16,21 +16,21 @@ router.get('/', projectController.getProjects);
 router.get('/:id', projectController.getProjectById);
 router.post(
   '/',
-  requireRole('ADMIN', 'COORDINADOR'),
+  requireRole(['admin', 'lider_organizacion']),
   validateProject,
   validate,
   projectController.createProject
 );
 router.put(
   '/:id',
-  requireRole('ADMIN', 'COORDINADOR'),
+  requireRole(['admin', 'lider_organizacion']),
   validateProject,
   validate,
   projectController.updateProject
 );
 router.patch(
   '/:id/committee',
-  requireRole('ADMIN', 'COORDINADOR'),
+  requireRole(['admin', 'lider_organizacion']),
   assignCommitteeValidator,
   validate,
   projectController.assignCommittee

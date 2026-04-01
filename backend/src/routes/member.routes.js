@@ -672,6 +672,30 @@ router.post(
 
 /**
  * -----------------------------------------------------------------------------
+ * VALIDAR HORAS DE UN MIEMBRO (CU-17)
+ * -----------------------------------------------------------------------------
+ * 
+ * Permite a un coordinador o administrador validar las horas sociales registradas.
+ * 
+ * @route PATCH /api/members/:id/horas/:horaId/validate
+ * @access Privado (requiere autenticación)
+ * @middleware authenticate
+ * 
+ * @header {string} Authorization - Bearer <token>
+ * @param {string} id - ID del miembro
+ * @param {string} horaId - ID del registro de horas
+ * @body {Object} requestData
+ * @body {boolean} requestData.aprobado - true para aprobar, false para rechazar
+ * @body {string} [requestData.observaciones] - Observaciones al validar/rechazar
+ */
+router.patch(
+  '/:id/horas/:horaId/validate',
+  authenticate,
+  memberController.validateMemberHours
+);
+
+/**
+ * -----------------------------------------------------------------------------
  * OBTENER PROYECTOS DE UN MIEMBRO
  * -----------------------------------------------------------------------------
  * 

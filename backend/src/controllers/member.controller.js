@@ -962,6 +962,67 @@ export const registerMemberHours = async (req, res, next) => {
   }
 };
 
+/**
+ * -----------------------------------------------------------------------------
+ * VALIDAR HORAS DE UN MIEMBRO (CU-17)
+ * -----------------------------------------------------------------------------
+ * 
+ * Caso de Uso: Validar (aprobar/rechazar) horas sociales de un miembro
+ * 
+ * @route PATCH /api/members/:id/horas/:horaId/validate
+ * @access Privado (requiere autenticación + rol: admin, lider_organizacion, coordinador)
+ * 
+ * @param {Object} req - Objeto de petición de Express
+ * @param {string} req.params.id - ID del miembro
+ * @param {string} req.params.horaId - ID del registro de horas
+ * @param {Object} req.body - Datos de validación
+ * @param {boolean} req.body.aprobado - Si las horas son aprobadas o rechazadas
+ * @param {string} [req.body.observaciones] - Observaciones (obligatorio si rechaza)
+ * @param {Object} req.user - Usuario autenticado
+ * @param {Object} res - Objeto de respuesta de Express
+ * @param {Function} next - Función next de Express
+ * 
+ * @returns {Object} Respuesta con el registro actualizado
+ */
+export const validateMemberHours = async (req, res, next) => {
+  try {
+    const { id: memberId, horaId } = req.params;
+    const { aprobado, observaciones } = req.body;
+
+    if (aprobado === undefined || aprobado === null) {
+      throw ApiError.badRequest('El campo aprobado es requerido (true o false)');
+    }
+
+    if (!aprobado && (!observaciones || observaciones.trim() === '')) {
+      throw ApiError.badRequest('Debe proveer observaciones al rechazar las horas');
+    }
+
+    const allowedRoles = ['admin', 'lider_organizacion', 'coordinador'];
+    if (!allowedRoles.includes(req.user.role)) {
+      throw ApiError.forbidden('No tienes permisos para validar horas');
+    }
+
+    const updatedRecord = await memberService.validateHours(
+      horaId,
+      aprobado,
+      req.user.id,
+      observaciones
+    );
+
+    return res.status(StatusCodes.OK).json(
+      new ApiResponse(
+        StatusCodes.OK,
+        {
+          registro: updatedRecord,
+        },
+        'Horas validadas exitosamente'
+      )
+    );
+  } catch (error) {
+    next(error);
+  }
+};
+
 // =============================================================================
 // EXPORTACIÓN POR DEFECTO
 // =============================================================================
@@ -992,4 +1053,5 @@ export default {
   reactivateMember,
   getMemberHours,
   registerMemberHours,
+  validateMemberHours,
 };

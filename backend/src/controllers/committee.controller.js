@@ -668,22 +668,13 @@ export const deactivateCommittee = async (req, res, next) => {
  */
 export const assignLeader = async (req, res, next) => {
   try {
-    // =========================================================================
-    // 1. EXTRAER ID Y DATOS DEL BODY
-    // =========================================================================
     const { id } = req.params;
     const { liderComiteId } = req.body;
 
-    // =========================================================================
-    // 2. VALIDAR DATOS REQUERIDOS
-    // =========================================================================
     if (!liderComiteId) {
       throw ApiError.badRequest('ID del líder es requerido');
     }
 
-    // =========================================================================
-    // 3. VALIDAR PERMISOS DEL USUARIO
-    // =========================================================================
     const allowedRoles = ['admin', 'lider_organizacion'];
     
     if (!allowedRoles.includes(req.user.role)) {
@@ -692,31 +683,68 @@ export const assignLeader = async (req, res, next) => {
       );
     }
 
-    // =========================================================================
-    // 4. LLAMAR AL SERVICIO DE ASIGNACIÓN
-    // =========================================================================
-    const committee = await committeeService.assignLeader(id, liderComiteId, {
+    const committee = await committeeService.assignLeader(req.supabase, id, liderComiteId, {
       assignedBy: req.user.id,
     });
 
-    // =========================================================================
-    // 5. RETORNAR RESPUESTA EXITOSA
-    // =========================================================================
     return res.status(StatusCodes.OK).json(
       new ApiResponse(
         StatusCodes.OK,
         {
           committee: {
             id: committee.id,
-            liderComiteId: committee.liderComiteId,
-            updatedAt: committee.fechaEdicion,
+            liderComiteId: committee.lidercomiteid,
           },
         },
         'Líder asignado exitosamente'
       )
     );
   } catch (error) {
-    // Pasar errores al middleware de manejo de errores
+    next(error);
+  }
+};
+
+/**
+ * -----------------------------------------------------------------------------
+ * ASIGNAR MIEMBRO A COMITÉ (CU-09)
+ * -----------------------------------------------------------------------------
+ */
+export const addMember = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { miembroId } = req.body;
+
+    if (!miembroId) throw ApiError.badRequest('ID del miembro es requerido');
+
+    const result = await committeeService.addMemberToCommittee(req.supabase, id, miembroId, {
+      assignedBy: req.user.id
+    });
+
+    return res.status(StatusCodes.OK).json(
+      new ApiResponse(StatusCodes.OK, result, 'Miembro asignado al comité exitosamente')
+    );
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * -----------------------------------------------------------------------------
+ * REMOVER MIEMBRO DE COMITÉ (CU-09)
+ * -----------------------------------------------------------------------------
+ */
+export const removeMember = async (req, res, next) => {
+  try {
+    const { id, memberId } = req.params;
+
+    await committeeService.removeMemberFromCommittee(req.supabase, id, memberId, {
+      removedBy: req.user.id
+    });
+
+    return res.status(StatusCodes.OK).json(
+      new ApiResponse(StatusCodes.OK, {}, 'Miembro removido del comité exitosamente')
+    );
+  } catch (error) {
     next(error);
   }
 };
