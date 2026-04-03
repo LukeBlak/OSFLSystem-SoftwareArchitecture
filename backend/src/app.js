@@ -4,6 +4,7 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 import { env } from './config/env.js';
 import { logger } from './utils/logger.js';
+import { requestContextMiddleware } from './utils/requestContext.js';
 
 const app = express();
 
@@ -17,6 +18,9 @@ app.use(cors({
 // Parsing
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Contexto por petición para propagar cliente Supabase autenticado
+app.use(requestContextMiddleware);
 
 // Logging
 if (env.NODE_ENV === 'development') {

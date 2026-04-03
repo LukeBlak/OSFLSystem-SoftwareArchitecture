@@ -140,6 +140,31 @@ export const supabase = createClient(
   }
 );
 
+/**
+ * Crea un cliente Supabase por petición, opcionalmente autenticado con JWT.
+ * Se usa para que RLS se aplique según el usuario autenticado en Node.
+ *
+ * @param {string|null} jwtToken
+ * @returns {import('@supabase/supabase-js').SupabaseClient}
+ */
+export const createRequestSupabaseClient = (jwtToken = null) => {
+  const headers = {
+    'X-Client-Info': 'osflsystem-backend-request',
+  };
+
+  if (jwtToken) {
+    headers.Authorization = `Bearer ${jwtToken}`;
+  }
+
+  return createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+    global: { headers },
+  });
+};
+
 // =============================================================================
 // CLIENTE ADMINISTRATIVO DE SUPABASE (Operaciones con Privilegios)
 // =============================================================================

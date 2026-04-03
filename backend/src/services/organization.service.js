@@ -346,9 +346,10 @@ export const getOrganizationById = async (organizationId, currentUser) => {
     // =========================================================================
     // 2. OBTENER ORGANIZACIÓN
     // =========================================================================
-    const { data: organization, error } = await OrganizationRepository.findById(organizationId);
+    const organizationResult = await OrganizationRepository.findById(organizationId);
+    const organization = organizationResult?.data || organizationResult;
 
-    if (error || !organization) {
+    if (!organization) {
       throw ApiError.notFound('Organización no encontrada');
     }
 

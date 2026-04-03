@@ -398,9 +398,10 @@ export const getMemberById = async (memberId, currentUser) => {
     // =========================================================================
     // 2. OBTENER MIEMBRO
     // =========================================================================
-    const { data: member, error } = await MemberRepository.findById(memberId);
+    const memberResult = await MemberRepository.findById(memberId);
+    const member = memberResult?.data || memberResult;
 
-    if (error || !member) {
+    if (!member) {
       throw ApiError.notFound('Miembro no encontrado');
     }
 

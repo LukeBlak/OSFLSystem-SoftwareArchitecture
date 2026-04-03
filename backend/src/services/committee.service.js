@@ -28,8 +28,9 @@
 import { ApiError } from '../utils/apiError.js';
 import { StatusCodes } from 'http-status-codes';
 import { logger } from '../utils/logger.js';
-// Repositorios eliminados para evitar errores de compilación, 
-// delegando sus CUs al desarrollador encargado. Nosotros usaremos Supabase.
+import { CommitteeRepository } from '../repositories/CommitteeRepository.js';
+import { OrganizationRepository } from '../repositories/OrganizationRepository.js';
+import { MemberRepository } from '../repositories/MemberRepository.js';
 import {
   COMMITTEE_STATUS,
   COMMITTEE_AREAS,
@@ -339,9 +340,10 @@ export const getCommitteeById = async (committeeId, currentUser) => {
     // =========================================================================
     // 2. OBTENER COMITÉ
     // =========================================================================
-    const { data: committee, error } = await CommitteeRepository.findById(committeeId);
+    const committeeResult = await CommitteeRepository.findById(committeeId);
+    const committee = committeeResult?.data || committeeResult;
 
-    if (error || !committee) {
+    if (!committee) {
       throw ApiError.notFound('Comité no encontrado');
     }
 

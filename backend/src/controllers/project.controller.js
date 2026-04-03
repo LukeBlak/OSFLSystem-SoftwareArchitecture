@@ -43,8 +43,8 @@ export const assignCommittee = async (req, res, next) => {
   try {
     const { comiteId } = req.body;
     if (!comiteId) return next(new ApiError(400, 'comiteId es requerido'));
-    const project = await projectService.assignCommittee(req.params.id, comiteId);
-    res.json(ApiResponse.success('Comit� vinculado', project));
+    const project = await projectService.assignCommittee(req.supabase, req.params.id, comiteId);
+    res.json(ApiResponse.success('Comité vinculado', project));
   } catch (err) {
     next(err);
   }

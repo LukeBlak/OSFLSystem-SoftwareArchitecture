@@ -27,6 +27,8 @@ import { StatusCodes } from 'http-status-codes';
 import { createClient } from '@supabase/supabase-js';
 import { ApiError } from '../utils/apiError.js';
 import { env } from '../config/env.js';
+import { createRequestSupabaseClient } from '../config/supabase.js';
+import { setRequestSupabaseClient } from '../utils/requestContext.js';
 
 // =============================================================================
 // CONFIGURACIÓN DEL CLIENTE SUPABASE PARA VERIFICACIÓN DE TOKENS
@@ -340,13 +342,8 @@ export const authenticate = async (req, res, next) => {
      * el envío del token JWT del usuario. Esto permite que Supabase aplique
      * las políticas de seguridad por fila (RLS) automáticamente.
      */
-    req.supabase = createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY, {
-      global: {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      }
-    });
+    req.supabase = createRequestSupabaseClient(token);
+    setRequestSupabaseClient(req.supabase);
 
     // =========================================================================
     // 9. CONTINUAR CON LA CADENA DE MIDDLEWARE
@@ -655,6 +652,8 @@ export const optionalAuth = async (req, res, next) => {
     if (!authHeader) {
       req.user = null;
       req.authContext = { authenticated: false };
+      req.supabase = createRequestSupabaseClient();
+      setRequestSupabaseClient(req.supabase);
       return next();
     }
 
@@ -683,20 +682,28 @@ export const optionalAuth = async (req, res, next) => {
             userId: user.id,
             authenticatedAt: new Date().toISOString(),
           };
+          req.supabase = createRequestSupabaseClient(token);
+          setRequestSupabaseClient(req.supabase);
         } else {
           // Token inválido pero continuamos como anónimo
           req.user = null;
           req.authContext = { authenticated: false };
+          req.supabase = createRequestSupabaseClient();
+          setRequestSupabaseClient(req.supabase);
         }
       } catch (verifyError) {
         // Error de verificación pero continuamos como anónimo
         req.user = null;
         req.authContext = { authenticated: false };
+        req.supabase = createRequestSupabaseClient();
+        setRequestSupabaseClient(req.supabase);
       }
     } else {
       // Formato de token inválido pero continuamos como anónimo
       req.user = null;
       req.authContext = { authenticated: false };
+      req.supabase = createRequestSupabaseClient();
+      setRequestSupabaseClient(req.supabase);
     }
 
     // =========================================================================
@@ -708,6 +715,8 @@ export const optionalAuth = async (req, res, next) => {
     // En autenticación opcional, los errores no detienen la petición
     req.user = null;
     req.authContext = { authenticated: false };
+    req.supabase = createRequestSupabaseClient();
+    setRequestSupabaseClient(req.supabase);
     next();
   }
 };
