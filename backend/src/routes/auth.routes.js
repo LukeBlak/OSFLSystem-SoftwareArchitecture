@@ -29,6 +29,8 @@
 import { Router } from 'express';
 import authController from '../controllers/auth.controller.js';
 import { authenticate, optionalAuth } from '../middleware/auth.middleware.js';
+import { requireRole } from '../middleware/role.middleware.js';
+import { USER_ROLES as ROLES } from '../models/User.js';
 import { validate } from '../middleware/validation.middleware.js';
 import {
   loginSchema,
@@ -576,7 +578,7 @@ router.post(
 router.get(
   '/users',
   authenticate,
-  // requireRole(['admin', 'super_admin']), // Descomentar cuando se implemente
+  requireRole([ROLES.ADMIN, ROLES.SUPER_ADMIN]),
   authController.listUsers
 );
 
@@ -601,7 +603,7 @@ router.get(
 router.put(
   '/users/:id/deactivate',
   authenticate,
-  // requireRole(['admin', 'super_admin']), // Descomentar cuando se implemente
+  requireRole([ROLES.ADMIN, ROLES.SUPER_ADMIN]),
   authController.deactivateUser
 );
 
@@ -626,7 +628,7 @@ router.put(
 router.put(
   '/users/:id/activate',
   authenticate,
-  // requireRole(['admin', 'super_admin']), // Descomentar cuando se implemente
+  requireRole([ROLES.ADMIN, ROLES.SUPER_ADMIN]),
   authController.activateUser
 );
 

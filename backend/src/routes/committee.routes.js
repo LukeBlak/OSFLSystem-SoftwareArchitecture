@@ -29,7 +29,7 @@ import { Router } from 'express';
 import committeeController from '../controllers/committee.controller.js';
 import { authenticate } from '../middleware/auth.middleware.js';
 import { requireRole } from '../middleware/role.middleware.js';
-import { ROLES } from '../models/User.js';
+import { USER_ROLES as ROLES } from '../models/User.js';
 import { validate } from '../middleware/validation.middleware.js';
 import {
   createCommitteeSchema,
