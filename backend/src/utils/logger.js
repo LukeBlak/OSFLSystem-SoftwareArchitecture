@@ -126,7 +126,7 @@ const formatLevel = (level, useColors) => {
   const config = levelConfig[level] || levelConfig.info;
   
   if (useColors) {
-    return `${config.color}${config.bright}[${config.label}]${colors.reset}`;
+    return `${colors.bright}${config.color}[${config.label}]${colors.reset}`;
   }
   
   return `[${config.label}]`;
@@ -794,12 +794,6 @@ if (isDevelopment) {
  */
 export {
   logger,
-  dbLogger,
-  authLogger,
-  httpLogger,
-  externalLogger,
-  httpLoggerMiddleware,
-  addExternalService,
   Logger,
 };
 
