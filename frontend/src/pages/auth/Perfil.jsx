@@ -7,9 +7,11 @@ function Perfil() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [lastAccess, setLastAccess] = useState(null);
 
   useEffect(() => {
     loadUserProfile();
+    updateLastAccess();
   }, []);
 
   const loadUserProfile = async () => {
@@ -20,12 +22,49 @@ function Perfil() {
         return;
       }
       setUser(currentUser);
+      
+      //Recuperar último acceso guardado en localStorage
+      const storedLastAccess = localStorage.getItem(`lastAccess_${currentUser.id || currentUser.email}`);
+      if (storedLastAccess) {
+        setLastAccess(storedLastAccess);
+      }
     } catch (err) {
       console.error('Error loading profile:', err);
       setError('Error al cargar el perfil');
     } finally {
       setLoading(false);
     }
+  };
+
+  // Función para guardar el último acceso en localStorage
+  const updateLastAccess = () => {
+    const currentUser = authService.getUser();
+    if (!currentUser) return;
+    
+    const now = new Date().toISOString();
+    const storageKey = `lastAccess_${currentUser.id || currentUser.email}`;
+    
+    localStorage.setItem(storageKey, now);
+    setLastAccess(now); // ← Guardamos el string ISO directamente
+  };
+
+  // formatear la fecha de último acceso (EXACTO)
+  const formatLastAccess = (date) => {
+    if (!date) return 'Nunca';
+    
+    const last = new Date(date);
+    
+    if (isNaN(last.getTime())) return 'Nunca';
+    
+    return last.toLocaleString('es-ES', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    }).replace(',', '');
   };
 
   const handleLogout = async () => {
@@ -39,7 +78,7 @@ function Perfil() {
     }
   };
 
-  // 🔄 Loading state
+  // Loading state
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center p-6">
@@ -51,12 +90,12 @@ function Perfil() {
     );
   }
 
-  // 🚨 Error state
+  // Error state
   if (error) {
     return (
-      <div className="min-h-screen  flex items-center justify-center p-6">
+      <div className="min-h-screen flex items-center justify-center p-6">
         <div className="bg-white rounded-2xl shadow-xl p-8 text-center max-w-sm w-full">
-          <p className="text-red-600 font-medium mb-4">⚠️ {error}</p>
+          <p className="text-red-600 font-medium mb-4"> {error}</p>
           <button
             onClick={() => navigate('/login')}
             className="bg-teal-600 hover:bg-teal-700 text-white font-semibold py-2 px-6 rounded-lg transition-colors"
@@ -68,7 +107,7 @@ function Perfil() {
     );
   }
 
-  // 🎨 Helper para colores de badges según rol
+  // colores de badges según rol
   const getRoleBadgeClass = (role) => {
     switch (role) {
       case 'admin': return 'bg-red-100 text-red-700';
@@ -81,29 +120,29 @@ function Perfil() {
   };
 
   return (
-    <div className="min-h-screen  p-6 md:p-10">
+    <div className="min-h-screen p-6 md:p-10">
       {/* Header */}
-<div className="max-w-3xl mx-auto mb-8 flex flex-col sm:flex-row justify-between items-center gap-4">
-  <div className="flex items-center gap-3">
-    <button
-      onClick={() => window.history.back()}
-      className="p-2 rounded-lg text-teal-600 hover:bg-teal-100 transition-all duration-300"
-      aria-label="Volver a la página anterior"
-    >
-      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-6 h-6">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
-      </svg>
-    </button>
-    <h1 className="text-3xl md:text-4xl font-bold text-teal-600">Mi Perfil</h1>
-  </div>
-  
-  <button
-    onClick={handleLogout}
-    className="bg-teal-600 hover:bg-white hover:text-indigo-600 text-white font-semibold py-2.5 px-6 rounded-lg border-2 border-white backdrop-blur-sm transition-all duration-300"
-  >
-    Cerrar Sesión
-  </button>
-</div>
+      <div className="max-w-3xl mx-auto mb-8 flex flex-col sm:flex-row justify-between items-center gap-4">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => navigate(-1)}
+            className="p-2 rounded-lg text-teal-600 hover:bg-teal-100 transition-all duration-300"
+            aria-label="Volver a la página anterior"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-6 h-6">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
+            </svg>
+          </button>
+          <h1 className="text-3xl md:text-4xl font-bold text-teal-600">Mi Perfil</h1>
+        </div>
+        
+        <button
+          onClick={handleLogout}
+          className="bg-teal-600 hover:bg-white hover:text-indigo-600 text-white font-semibold py-2.5 px-6 rounded-lg border-2 border-white backdrop-blur-sm transition-all duration-300"
+        >
+          Cerrar Sesión
+        </button>
+      </div>
 
       {/* Profile Card */}
       <div className="bg-white rounded-2xl shadow-2xl p-6 md:p-10 max-w-3xl mx-auto mb-8">
@@ -152,25 +191,20 @@ function Perfil() {
             </div>
           )}
 
+          {/* Último acceso - FORMATO EXACTO */}
           <div className="bg-gray-50 p-4 rounded-xl md:col-span-2">
-            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Último acceso</label>
-            <p className="text-lg font-medium text-gray-800 mt-1">
-              {user?.lastSignInAt ? new Date(user.lastSignInAt).toLocaleString('es-ES') : 'Nunca'}
+            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+              Último acceso
+            </label>
+            <p className="text-lg font-mono font-medium text-gray-800 mt-1">
+              {formatLastAccess(lastAccess)}
             </p>
           </div>
         </div>
       </div>
 
-      {/* Actions */}
-      <div className="max-w-3xl mx-auto flex flex-col sm:flex-row gap-4 justify-center">
-        <button className="flex-1 bg-gradient-to-r from-teal-600 to-teal-500 hover:from-teal-700 hover:to-teal-600 text-white font-semibold py-3 px-6 rounded-lg shadow-md hover:shadow-lg transition-all duration-300">
-          Editar Perfil
-        </button>
-        <button className="flex-1 bg-white hover:bg-teal-50 text-teal-600 border-2 border-teal-600 font-semibold py-3 px-6 rounded-lg shadow-sm hover:shadow-md transition-all duration-300">
-          Cambiar Contraseña
-        </button>
+
       </div>
-    </div>
   );
 }
 
