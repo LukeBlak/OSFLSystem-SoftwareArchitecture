@@ -18,6 +18,7 @@ function RecuperarPassword() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const token = searchParams.get('token')?.trim() || '';
+  
   const [email, setEmail] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -27,56 +28,76 @@ function RecuperarPassword() {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
 
+  // Limpiar estados cuando cambie el token
   useEffect(() => {
     setError(null);
     setSuccess(false);
   }, [token]);
 
+  // Función mejorada para leer errores de la respuesta
   const readErrorMessage = async (response, fallbackMessage) => {
     try {
+      // Si la respuesta es exitosa, no hay error que leer
+      if (response.ok) return null;
+      
       const contentType = response.headers.get('content-type') || '';
-
+      
       if (contentType.includes('application/json')) {
         const data = await response.json();
+        // Priorizar mensajes amigables para el usuario
         return data?.error?.userMessage || data?.error?.message || data?.message || fallbackMessage;
       }
-
+      
       const text = await response.text();
       return text?.trim() || fallbackMessage;
-    } catch {
+    } catch (err) {
+      console.error('Error parsing error response:', err);
       return fallbackMessage;
     }
   };
 
+  // Paso 1: Solicitar enlace de recuperación
   const handleRequestResetEmail = async (e) => {
     e.preventDefault();
     setError(null);
     setLoading(true);
 
     try {
+      console.log('📤 Request forgot-password:', { email });
+      
       const response = await fetch(`${API_URL}/auth/forgot-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),
       });
 
+      console.log('📥 Response status:', response.status);
+      
+      // ⚠️ IMPORTANTE: Por seguridad, el backend DEBE retornar 200 siempre
+      // incluso si el email no está registrado. No mostramos errores de "usuario no encontrado".
       if (!response.ok) {
-        throw new Error(await readErrorMessage(response, 'No se pudo procesar la solicitud'));
+        const errorMsg = await readErrorMessage(response, 'No se pudo procesar la solicitud');
+        console.error('❌ Error en forgot-password:', errorMsg);
+        throw new Error(errorMsg);
       }
 
+      // Éxito: mostrar mensaje genérico (sin revelar si el email existe)
       setSuccess(true);
+      
     } catch (err) {
-      setError(err.message);
+      console.error('❌ Exception en forgot-password:', err);
+      setError(err.message || 'Ocurrió un error inesperado');
     } finally {
       setLoading(false);
     }
   };
 
-  // Paso 2: Establecer nueva contraseña
+  // Paso 2: Establecer nueva contraseña con token válido
   const handleResetPassword = async (e) => {
     e.preventDefault();
     setError(null);
 
+    // Validaciones locales
     if (newPassword !== confirmPassword) {
       setError('Las contraseñas no coinciden');
       return;
@@ -89,6 +110,8 @@ function RecuperarPassword() {
     setLoading(true);
 
     try {
+      console.log('📤 Request reset-password:', { token: token ? '***' : 'empty' });
+      
       const response = await fetch(`${API_URL}/auth/reset-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -99,13 +122,19 @@ function RecuperarPassword() {
         }),
       });
 
+      console.log('📥 Response status:', response.status);
+
       if (!response.ok) {
-        throw new Error(await readErrorMessage(response, 'Error al restablecer la contraseña'));
+        const errorMsg = await readErrorMessage(response, 'Error al restablecer la contraseña');
+        console.error('❌ Error en reset-password:', errorMsg);
+        throw new Error(errorMsg);
       }
 
       setSuccess(true);
+      
     } catch (err) {
-      setError(err.message);
+      console.error('❌ Exception en reset-password:', err);
+      setError(err.message || 'Ocurrió un error inesperado');
     } finally {
       setLoading(false);
     }
@@ -115,20 +144,19 @@ function RecuperarPassword() {
   if (success) {
     const isResetFlow = Boolean(token);
     const successTitle = isResetFlow ? 'Contraseña actualizada' : 'Correo enviado';
+    const successMessage = isResetFlow
+      ? 'Tu contraseña ha sido restablecida exitosamente. Usa la nueva clave para iniciar sesión.'
+      : 'Si el correo está registrado en nuestro sistema, recibirás un enlace para restablecer tu contraseña.';
 
     return (
-      <div className="min-h-screen bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-500 flex items-center justify-center p-4">
+      <div className="min-h-screen flex items-center justify-center p-4">
         <div className="w-full max-w-md">
           <div className="bg-white/95 backdrop-blur-sm rounded-3xl shadow-2xl p-8 md:p-10 border border-white/20 text-center">
             <div className="inline-flex items-center justify-center w-16 h-16 bg-emerald-100 rounded-2xl mb-4">
               <CheckCircle className="w-8 h-8 text-emerald-600" />
             </div>
             <h2 className="text-2xl font-bold text-gray-800 mb-2">{successTitle}</h2>
-            <p className="text-gray-600 mb-6">
-              {isResetFlow
-                ? 'Tu contraseña ha sido restablecida exitosamente. Usa la nueva clave para iniciar sesión.'
-                : 'Si el correo está registrado, recibirás un enlace para restablecer tu contraseña.'}
-            </p>
+            <p className="text-gray-600 mb-6">{successMessage}</p>
             <button
               onClick={() => navigate('/login')}
               className="w-full bg-gradient-to-r from-teal-600 to-teal-500 hover:from-teal-700 hover:to-teal-600 text-white font-semibold py-3 px-6 rounded-xl shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2"
@@ -137,16 +165,13 @@ function RecuperarPassword() {
               Volver al login
             </button>
           </div>
-          <p className="text-center text-white/70 text-xs mt-6">
-            © 2026 SIGEVOL. Todos los derechos reservados.
-          </p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-500 flex items-center justify-center p-4">
+    <div className="min-h-screen flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="bg-white/95 backdrop-blur-sm rounded-3xl shadow-2xl p-8 md:p-10 border border-white/20">
           
@@ -159,10 +184,8 @@ function RecuperarPassword() {
               <ArrowLeft className="w-4 h-4" />
               Volver
             </button>
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-teal-500 to-teal-600 rounded-2xl shadow-lg mb-4">
-              <ShieldCheck className="w-8 h-8 text-white" />
-            </div>
-            <h1 className="text-2xl font-bold bg-gradient-to-r from-teal-600 to-purple-600 bg-clip-text text-transparent">
+
+            <h1 className="text-2xl font-bold text-teal-600">
               Recuperar Contraseña
             </h1>
             <p className="text-gray-500 mt-2 text-sm">
@@ -178,6 +201,7 @@ function RecuperarPassword() {
             </div>
           )}
 
+          {/* Paso 1: Solicitar enlace (sin token) */}
           {!token && !success && (
             <form onSubmit={handleRequestResetEmail} className="space-y-5">
               <div>
@@ -205,16 +229,16 @@ function RecuperarPassword() {
                 {loading ? (
                   <>
                     <Loader2 className="w-5 h-5 animate-spin" />
-                      Enviando enlace...
+                    Enviando enlace...
                   </>
                 ) : (
-                    'Enviar enlace de recuperación'
+                  'Enviar enlace de recuperación'
                 )}
               </button>
             </form>
           )}
 
-          {/* Paso 2: Nueva Contraseña */}
+          {/* Paso 2: Nueva Contraseña (con token) */}
           {token && !success && (
             <form onSubmit={handleResetPassword} className="space-y-4">
               <div>
@@ -233,7 +257,13 @@ function RecuperarPassword() {
                     minLength={8}
                     disabled={loading}
                   />
-                  <button type="button" onClick={() => setShowNew(!showNew)} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors" tabIndex="-1">
+                  <button 
+                    type="button" 
+                    onClick={() => setShowNew(!showNew)} 
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors" 
+                    tabIndex="-1"
+                    aria-label={showNew ? "Ocultar contraseña" : "Mostrar contraseña"}
+                  >
                     {showNew ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                   </button>
                 </div>
@@ -254,7 +284,13 @@ function RecuperarPassword() {
                     required
                     disabled={loading}
                   />
-                  <button type="button" onClick={() => setShowConfirm(!showConfirm)} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors" tabIndex="-1">
+                  <button 
+                    type="button" 
+                    onClick={() => setShowConfirm(!showConfirm)} 
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                    tabIndex="-1"
+                    aria-label={showConfirm ? "Ocultar contraseña" : "Mostrar contraseña"}
+                  >
                     {showConfirm ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                   </button>
                 </div>
@@ -277,25 +313,7 @@ function RecuperarPassword() {
             </form>
           )}
 
-          {/* Nota MVP */}
-          <div className="mt-6 p-3 bg-gray-50 rounded-lg border border-gray-200 flex items-start gap-2">
-            <AlertCircle className="w-4 h-4 text-gray-500 flex-shrink-0 mt-0.5" />
-            <p className="text-xs text-gray-600">
-              ⚠️ Modo MVP: si no tienes un token en la URL, primero solicita el enlace desde esta misma pantalla.
-            </p>
-          </div>
-
-          {!token && !success && (
-            <p className="mt-4 text-xs text-gray-500 text-center">
-              Después de recibir el correo, abre el enlace para definir tu nueva contraseña.
-            </p>
-          )}
-
         </div>
-
-        <p className="text-center text-white/70 text-xs mt-6">
-          © 2026 SIGEVOL. Todos los derechos reservados.
-        </p>
       </div>
     </div>
   );

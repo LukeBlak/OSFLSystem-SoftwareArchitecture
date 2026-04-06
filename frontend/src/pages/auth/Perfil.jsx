@@ -42,7 +42,7 @@ function Perfil() {
   // 🔄 Loading state
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-indigo-600 to-purple-700 flex items-center justify-center p-6">
+      <div className="min-h-screen flex items-center justify-center p-6">
         <div className="bg-white rounded-2xl shadow-xl p-8 text-center max-w-sm w-full">
           <div className="w-12 h-12 border-4 border-gray-200 border-t-teal-500 rounded-full animate-spin mx-auto mb-4"></div>
           <p className="text-gray-600 font-medium">Cargando perfil...</p>
@@ -54,7 +54,7 @@ function Perfil() {
   // 🚨 Error state
   if (error) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-indigo-600 to-purple-700 flex items-center justify-center p-6">
+      <div className="min-h-screen  flex items-center justify-center p-6">
         <div className="bg-white rounded-2xl shadow-xl p-8 text-center max-w-sm w-full">
           <p className="text-red-600 font-medium mb-4">⚠️ {error}</p>
           <button
@@ -81,17 +81,29 @@ function Perfil() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-600 to-purple-700 p-6 md:p-10">
+    <div className="min-h-screen  p-6 md:p-10">
       {/* Header */}
-      <div className="max-w-3xl mx-auto mb-8 flex flex-col sm:flex-row justify-between items-center gap-4">
-        <h1 className="text-3xl md:text-4xl font-bold text-white">Mi Perfil</h1>
-        <button
-          onClick={handleLogout}
-          className="bg-white/20 hover:bg-white hover:text-indigo-600 text-white font-semibold py-2.5 px-6 rounded-lg border-2 border-white backdrop-blur-sm transition-all duration-300"
-        >
-          Cerrar Sesión
-        </button>
-      </div>
+<div className="max-w-3xl mx-auto mb-8 flex flex-col sm:flex-row justify-between items-center gap-4">
+  <div className="flex items-center gap-3">
+    <button
+      onClick={() => window.history.back()}
+      className="p-2 rounded-lg text-teal-600 hover:bg-teal-100 transition-all duration-300"
+      aria-label="Volver a la página anterior"
+    >
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-6 h-6">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
+      </svg>
+    </button>
+    <h1 className="text-3xl md:text-4xl font-bold text-teal-600">Mi Perfil</h1>
+  </div>
+  
+  <button
+    onClick={handleLogout}
+    className="bg-teal-600 hover:bg-white hover:text-indigo-600 text-white font-semibold py-2.5 px-6 rounded-lg border-2 border-white backdrop-blur-sm transition-all duration-300"
+  >
+    Cerrar Sesión
+  </button>
+</div>
 
       {/* Profile Card */}
       <div className="bg-white rounded-2xl shadow-2xl p-6 md:p-10 max-w-3xl mx-auto mb-8">
