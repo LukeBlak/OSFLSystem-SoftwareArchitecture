@@ -821,6 +821,101 @@ export const getCommitteeStats = async (req, res, next) => {
   }
 };
 
+/**
+ * Obtener miembros de un comité (CU-11)
+ * 
+ * Permite obtener la lista de miembros pertenecientes a un comité.
+ * 
+ * @route GET /api/committees/:id/members
+ * @access Privado (requiere autenticación)
+ * 
+ * @param {Object} req - Objeto de petición de Express
+ * @param {string} req.params.id - ID del comité (requerido)
+ * @param {number} [req.query.page] - Número de página (default: 1)
+ * @param {number} [req.query.limit] - Registros por página (default: 10, máximo 100)
+ * @param {Object} req.user - Usuario autenticado (inyectado por middleware)
+ * @param {Object} res - Objeto de respuesta de Express
+ * @param {Function} next - Función next de Express para manejo de errores
+ * 
+ * @returns {Object} Respuesta con lista de miembros y paginación
+ * 
+ * @throws {ApiError} 400 - Si el ID no es un UUID válido
+ * @throws {ApiError} 404 - Si el comité no existe
+ * 
+ * @example
+ * // Request
+ * GET /api/committees/uuid-comite/members?page=1&limit=10
+ * Authorization: Bearer <token>
+ * 
+ * @example
+ * // Response (200 OK)
+ * {
+ *   "success": true,
+ *   "data": {
+ *     "miembros": [
+ *       {
+ *         "id": "uuid-miembro-comite",
+ *         "comiteId": "uuid-comite",
+ *         "miembroId": "uuid-miembro",
+ *         "miembro": {
+ *           "id": "uuid-miembro",
+ *           "nombre": "Juan Pérez",
+ *           "email": "juan@example.com",
+ *           "dui": "01234567-8",
+ *           "telefono": "7000-0000",
+ *           "estadoActivo": true,
+ *           "horasTotales": 45.5,
+ *           "organizacion": { "nombre": "OSFL XYZ" }
+ *         }
+ *       },
+ *       // ... más miembros ...
+ *     ]
+ *   },
+ *   "pagination": {
+ *     "page": 1,
+ *     "limit": 10,
+ *     "total": 25,
+ *     "totalPages": 3
+ *   },
+ *   "message": "Miembros del comité obtenidos exitosamente"
+ * }
+ */
+export const getCommitteeMembers = async (req, res, next) => {
+  try {
+    // =========================================================================
+    // 1. EXTRAER PARÁMETROS DE LA PETICIÓN
+    // =========================================================================
+    const { id: committeeId } = req.params;
+    const { page = 1, limit = 10 } = req.query;
+
+    // =========================================================================
+    // 2. LLAMAR AL SERVICIO
+    // =========================================================================
+    const result = await committeeService.getCommitteeMembers(
+      committeeId,
+      { page, limit }
+    );
+
+    // =========================================================================
+    // 3. RETORNAR RESPUESTA EXITOSA
+    // =========================================================================
+    return res.status(StatusCodes.OK).json(
+      new ApiResponse(
+        StatusCodes.OK,
+        {
+          comiteId: committeeId,
+          miembros: result.members,
+        },
+        'Miembros del comité obtenidos exitosamente',
+        { pagination: result.pagination }
+      )
+    );
+  } catch (error) {
+    // Pasar errores al middleware de manejo de errores
+    next(error);
+  }
+};
+
 // =============================================================================
 // EXPORTACIÓN POR DEFECTO
 // =============================================================================
@@ -849,4 +944,5 @@ export default {
   deactivateCommittee,
   assignLeader,
   getCommitteeStats,
+  getCommitteeMembers,
 };

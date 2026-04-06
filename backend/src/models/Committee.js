@@ -669,6 +669,68 @@ export const COMMITTEE_TABLE_STRUCTURE = {
   ],
 };
 
+/**
+ * Esquema para listar miembros de un comité
+ */
+export const listCommitteeMembersSchema = z.object({
+  /**
+   * ID del comité
+   */
+  comiteId: z
+    .string()
+    .uuid('El ID del comité debe ser un UUID válido'),
+  
+  /**
+   * Filtrar por estado activo
+   */
+  estadoActivo: z
+    .boolean()
+    .optional(),
+  
+  /**
+   * Buscar por nombre o email
+   */
+  search: z
+    .string()
+    .max(100, 'La búsqueda no puede exceder 100 caracteres')
+    .optional(),
+  
+  /**
+   * Paginación
+   */
+  page: z
+    .string()
+    .regex(/^\d+$/)
+    .transform(val => parseInt(val, 10))
+    .default('1'),
+  
+  limit: z
+    .string()
+    .regex(/^\d+$/)
+    .transform(val => Math.min(100, Math.max(1, parseInt(val, 10))))
+    .default('10'),
+});
+
+/**
+ * Esquema para obtener detalles de un miembro del comité
+ */
+export const getCommitteeMemberSchema = z.object({
+  /**
+   * ID del comité
+   */
+  comiteId: z
+    .string()
+    .uuid(),
+  
+  /**
+   * ID del miembro
+   */
+  miembroId: z
+    .string()
+    .uuid(),
+});
+
+
 // =============================================================================
 // EXPORTACIÓN POR DEFECTO
 // =============================================================================
@@ -720,4 +782,12 @@ export default {
   
   // Documentación de tabla
   COMMITTEE_TABLE_STRUCTURE,
+};
+
+export const validateListCommitteeMembers = (data) => {
+  return listCommitteeMembersSchema.parse(data);
+};
+
+export const validateGetCommitteeMember = (data) => {
+  return getCommitteeMemberSchema.parse(data);
 };

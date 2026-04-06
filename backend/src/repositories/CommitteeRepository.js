@@ -170,3 +170,176 @@ export const CommitteeRepository = {
     return data || [];
   },
 };
+
+/**
+ * Obtener miembros de un comité
+ * 
+ * @param {string} comiteId - ID del comité
+ * @param {Object} options - Opciones de consulta
+ * @returns {Promise<{data: Array, error: Object|null, count: number}>}
+ */
+export const getCommitteeMembers = async (comiteId, options = {}) => {
+  try {
+    const {
+      estadoActivo,
+      search,
+      limit = 10,
+      offset = 0,
+    } = options;
+
+    // Opción 1: Si existe tabla intermedia miembro_comite
+    let query = supabase
+      .from('miembro_comite')
+      .select(`
+        *,
+        miembro:miembroId (
+          id,
+          nombre,
+          email,
+          dui,
+          telefono,
+          estadoActivo,
+          horasTotales,
+          organizacion:organizacionId (nombre)
+        )
+      `, { count: 'exact' })
+      .eq('comiteId', comiteId);
+
+    if (estadoActivo !== undefined) {
+      query = query.eq('miembro.estadoActivo', estadoActivo);
+    }
+
+    if (search) {
+      query = query.or(`miembro.nombre.ilike.%${search}%,miembro.email.ilike.%${search}%`);
+    }
+
+    const { data, error, count } = await query
+      .range(offset, offset + limit - 1)
+      .order('miembro.nombre', { ascending: true });
+
+    return { data: data || [], error, count: count || 0 };
+
+  } catch (error) {
+    logger.error('Error al obtener miembros del comité', { error, comiteId });
+    return { data: [], error, count: 0 };
+  }
+};
+
+/**
+ * Obtener un miembro específico de un comité
+ * 
+ * @param {string} comiteId - ID del comité
+ * @param {string} miembroId - ID del miembro
+ * @returns {Promise<{data: Object|null, error: Object|null}>}
+ */
+export const getCommitteeMember = async (comiteId, miembroId) => {
+  try {
+    const { data, error } = await supabase
+      .from('miembro_comite')
+      .select(`
+        *,
+        miembro:miembroId (
+          id,
+          nombre,
+          email,
+          dui,
+          telefono,
+          estadoActivo,
+          horasTotales,
+          direccion,
+          fechanacimiento
+        ),
+        comite:comiteId (
+          id,
+          nombre,
+          areaResponsabilidad
+        )
+      `)
+      .eq('comiteId', comiteId)
+      .eq('miembroId', miembroId)
+      .maybeSingle();
+
+    return { data, error };
+  } catch (error) {
+    logger.error('Error al obtener miembro del comité', { error, comiteId, miembroId });
+    return { data: null, error };
+  }
+};
+
+/**
+ * Contar miembros de un comité
+ * 
+ * @param {string} comiteId - ID del comité
+ * @returns {Promise<number>}
+ */
+export const countCommitteeMembers = async (comiteId) => {
+  try {
+    const { count, error } = await supabase
+      .from('miembro_comite')
+      .select('*', { count: 'exact', head: true })
+      .eq('comiteId', comiteId);
+
+    if (error) {
+      logger.error('Error al contar miembros del comité', { error, comiteId });
+      return 0;
+    }
+
+    return count || 0;
+  } catch (error) {
+    logger.error('Excepción en countCommitteeMembers', { error });
+    return 0;
+  }
+};
+
+/**
+ * Obtener estadísticas de miembros del comité
+ * 
+ * @param {string} comiteId - ID del comité
+ * @returns {Promise<Object>}
+ */
+export const getCommitteeMembersStats = async (comiteId) => {
+  try {
+    const { data, error } = await supabase
+      .from('miembro_comite')
+      .select(`
+        miembro:miembroId (
+          estadoActivo,
+          horasTotales
+        )
+      `)
+      .eq('comiteId', comiteId);
+
+    if (error) {
+      return { stats: null, error };
+    }
+
+    const totalMiembros = data?.length || 0;
+    const miembrosActivos = data?.filter(m => m.miembro?.estadoActivo === true).length || 0;
+    const miembrosInactivos = totalMiembros - miembrosActivos;
+    const horasTotales = data?.reduce((sum, m) => sum + (parseFloat(m.miembro?.horasTotales) || 0), 0) || 0;
+    const promedioHoras = totalMiembros > 0 ? horasTotales / totalMiembros : 0;
+
+    return {
+      stats: {
+        totalMiembros,
+        miembrosActivos,
+        miembrosInactivos,
+        horasTotales,
+        promedioHoras: Math.round(promedioHoras * 100) / 100,
+      },
+      error: null,
+    };
+  } catch (error) {
+    logger.error('Error al obtener estadísticas de miembros', { error, comiteId });
+    return { stats: null, error };
+  }
+};
+
+
+export default {
+  // ... existentes ...
+  getCommitteeMembers,
+  getCommitteeMember,
+  countCommitteeMembers,
+  getCommitteeMembersStats,
+};
