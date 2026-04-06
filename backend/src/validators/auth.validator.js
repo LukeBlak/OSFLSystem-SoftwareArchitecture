@@ -138,7 +138,7 @@ const VALID_ROLES = [
  *   password: 'Contraseña123'
  * }
  */
-export const loginSchema = z.object({
+ const loginSchema = z.object({
   /**
    * Email del usuario
    * - Debe ser email válido
@@ -183,7 +183,7 @@ export const loginSchema = z.object({
  *   }
  * }
  */
-export const registerSchema = z.object({
+ const registerSchema = z.object({
   /**
    * Email del usuario (único en el sistema)
    */
@@ -300,7 +300,7 @@ export const registerSchema = z.object({
  *   email: 'usuario@ejemplo.com'
  * }
  */
-export const forgotPasswordSchema = z.object({
+ const forgotPasswordSchema = z.object({
   /**
    * Email del usuario registrado
    */
@@ -329,7 +329,7 @@ export const forgotPasswordSchema = z.object({
  *   passwordConfirm: 'NuevaContraseña123'
  * }
  */
-export const resetPasswordSchema = z.object({
+ const resetPasswordSchema = z.object({
   /**
    * Token de reestablecimiento (recibido por email)
    * - Debe tener exactamente 64 caracteres (hexadecimal)
@@ -384,7 +384,7 @@ export const resetPasswordSchema = z.object({
  *   newPasswordConfirm: 'NuevaContraseña456'
  * }
  */
-export const changePasswordSchema = z.object({
+ const changePasswordSchema = z.object({
   /**
    * Contraseña actual
    * - Requerida para verificar identidad
@@ -443,7 +443,7 @@ export const changePasswordSchema = z.object({
  *   token: 'abc123...'
  * }
  */
-export const verifyEmailSchema = z.object({
+ const verifyEmailSchema = z.object({
   /**
    * Token de verificación de email
    */
@@ -468,7 +468,7 @@ export const verifyEmailSchema = z.object({
  *   refreshToken: 'eyJhbGciOiJIUzI1NiIs...'
  * }
  */
-export const refreshTokenSchema = z.object({
+ const refreshTokenSchema = z.object({
   /**
    * Token de refresco
    * - Debe ser un JWT válido
@@ -488,7 +488,7 @@ export const refreshTokenSchema = z.object({
  * 
  * @type {z.ZodString}
  */
-export const emailSchema = z
+ const emailSchema = z
   .string()
   .min(1, 'El email es requerido')
   .max(MAX_EMAIL_LENGTH, `El email no puede exceder ${MAX_EMAIL_LENGTH} caracteres`)
@@ -504,7 +504,7 @@ export const emailSchema = z
  * 
  * @type {z.ZodString}
  */
-export const passwordSchema = z
+ const passwordSchema = z
   .string()
   .min(MIN_PASSWORD_LENGTH, `La contraseña debe tener al menos ${MIN_PASSWORD_LENGTH} caracteres`)
   .max(MAX_PASSWORD_LENGTH, `La contraseña no puede exceder ${MAX_PASSWORD_LENGTH} caracteres`)
@@ -522,7 +522,7 @@ export const passwordSchema = z
  * 
  * @type {z.ZodString}
  */
-export const nameSchema = z
+ const nameSchema = z
   .string()
   .min(MIN_NAME_LENGTH, `El nombre debe tener al menos ${MIN_NAME_LENGTH} caracteres`)
   .max(MAX_NAME_LENGTH, `El nombre no puede exceder ${MAX_NAME_LENGTH} caracteres`)
@@ -538,7 +538,7 @@ export const nameSchema = z
  * 
  * @type {z.ZodString}
  */
-export const phoneSchema = z
+ const phoneSchema = z
   .string()
   .regex(PHONE_REGEX, 'El teléfono debe tener 8 dígitos')
   .optional();
@@ -552,7 +552,7 @@ export const phoneSchema = z
  * 
  * @type {z.ZodString}
  */
-export const uuidSchema = z
+ const uuidSchema = z
   .string()
   .uuid('El ID debe ser un UUID válido');
 
@@ -577,7 +577,7 @@ export const uuidSchema = z
  *   password: 'Contraseña123'
  * });
  */
-export const validateLogin = (data) => {
+ const validateLogin = (data) => {
   return loginSchema.parse(data);
 };
 
@@ -592,7 +592,7 @@ export const validateLogin = (data) => {
  * @returns {Object} Datos validados
  * @throws {z.ZodError} Si los datos no son válidos
  */
-export const validateRegister = (data) => {
+ const validateRegister = (data) => {
   return registerSchema.parse(data);
 };
 
@@ -607,7 +607,7 @@ export const validateRegister = (data) => {
  * @returns {Object} Datos validados
  * @throws {z.ZodError} Si los datos no son válidos
  */
-export const validateForgotPassword = (data) => {
+ const validateForgotPassword = (data) => {
   return forgotPasswordSchema.parse(data);
 };
 
@@ -622,7 +622,7 @@ export const validateForgotPassword = (data) => {
  * @returns {Object} Datos validados
  * @throws {z.ZodError} Si los datos no son válidos
  */
-export const validateResetPassword = (data) => {
+ const validateResetPassword = (data) => {
   return resetPasswordSchema.parse(data);
 };
 
@@ -637,7 +637,7 @@ export const validateResetPassword = (data) => {
  * @returns {Object} Datos validados
  * @throws {z.ZodError} Si los datos no son válidos
  */
-export const validateChangePassword = (data) => {
+ const validateChangePassword = (data) => {
   return changePasswordSchema.parse(data);
 };
 
@@ -652,7 +652,7 @@ export const validateChangePassword = (data) => {
  * @returns {Object} Datos validados
  * @throws {z.ZodError} Si los datos no son válidos
  */
-export const validateVerifyEmail = (data) => {
+ const validateVerifyEmail = (data) => {
   return verifyEmailSchema.parse(data);
 };
 
@@ -667,7 +667,7 @@ export const validateVerifyEmail = (data) => {
  * @returns {Object} Datos validados
  * @throws {z.ZodError} Si los datos no son válidos
  */
-export const validateRefreshToken = (data) => {
+ const validateRefreshToken = (data) => {
   return refreshTokenSchema.parse(data);
 };
 
@@ -691,7 +691,7 @@ export const validateRefreshToken = (data) => {
  * const result = validatePasswordStrength('Contraseña123');
  * // { isValid: true, errors: [], score: 4 }
  */
-export const validatePasswordStrength = (password) => {
+ const validatePasswordStrength = (password) => {
   const errors = [];
   let score = 0;
 
@@ -755,7 +755,7 @@ export const validatePasswordStrength = (password) => {
  * @returns {boolean} return.isValid - Si el email es válido
  * @returns {string|null} return.error - Mensaje de error si es inválido
  */
-export const validateEmailFormat = (email) => {
+ const validateEmailFormat = (email) => {
   try {
     emailSchema.parse(email);
     return {
@@ -786,7 +786,7 @@ export const validateEmailFormat = (email) => {
  * const friendlyErrors = getFriendlyErrors(zodError);
  * // [{ field: 'email', message: 'El email debe ser válido' }]
  */
-export const getFriendlyErrors = (error) => {
+ const getFriendlyErrors = (error) => {
   if (!error || !(error instanceof z.ZodError)) {
     return [];
   }
@@ -799,11 +799,11 @@ export const getFriendlyErrors = (error) => {
 };
 
 // =============================================================================
-// EXPORTACIÓN POR DEFECTO
+// ACIÓN POR DEFECTO
 // =============================================================================
 
 /**
- * Exporta todos los esquemas y funciones del módulo
+ * a todos los esquemas y funciones del módulo
  * 
  * @example
  * // Importación named (recomendado)
@@ -819,7 +819,7 @@ export const getFriendlyErrors = (error) => {
  * import authValidator from './validators/auth.validator.js';
  * authValidator.loginSchema.parse(data);
  */
-export default {
+ export default {
   // Esquemas principales
   loginSchema,
   registerSchema,
@@ -859,9 +859,9 @@ export default {
 };
 
 /**
- * Exportaciones named para conveniencia
+ * aciones named para conveniencia
  */
-export {
+ export {
   // Esquemas
   loginSchema,
   registerSchema,

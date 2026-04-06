@@ -582,7 +582,7 @@ ApiResponse.list = (data, metadata, message) => {
  *   // Manejar como ApiResponse
  * }
  */
-export const isApiResponse = (response) => {
+ const isApiResponse = (response) => {
   return response instanceof ApiResponse;
 };
 
@@ -594,7 +594,7 @@ export const isApiResponse = (response) => {
  * @param {string} [message] - Mensaje opcional
  * @returns {ApiResponse} Nueva instancia de ApiResponse
  */
-export const toApiResponse = (data, statusCode = StatusCodes.OK, message) => {
+ const toApiResponse = (data, statusCode = StatusCodes.OK, message) => {
   if (data instanceof ApiResponse) {
     return data;
   }
@@ -608,7 +608,7 @@ export const toApiResponse = (data, statusCode = StatusCodes.OK, message) => {
  * @param {string} [message] - Mensaje opcional
  * @returns {ApiResponse} Nueva instancia de ApiResponse
  */
-export const emptyResponse = (statusCode = StatusCodes.OK, message) => {
+ const emptyResponse = (statusCode = StatusCodes.OK, message) => {
   return new ApiResponse(statusCode, null, message);
 };
 
@@ -620,7 +620,7 @@ export const emptyResponse = (statusCode = StatusCodes.OK, message) => {
  * @param {string} [message] - Mensaje opcional
  * @returns {ApiResponse} Nueva instancia de ApiResponse
  */
-export const metadataResponse = (metadata, statusCode = StatusCodes.OK, message) => {
+ const metadataResponse = (metadata, statusCode = StatusCodes.OK, message) => {
   const response = new ApiResponse(statusCode, null, message);
   response.addMetadata(metadata);
   return response;
@@ -646,7 +646,7 @@ export const metadataResponse = (metadata, statusCode = StatusCodes.OK, message)
  * import ApiResponse from './utils/apiResponse.js';
  * new ApiResponse(200, data);
  */
-export {
+ export {
   ApiResponse,
   isApiResponse,
   toApiResponse,
@@ -655,4 +655,4 @@ export {
 };
 
 // Exportación por defecto (clase principal)
-export default ApiResponse;
+ export default ApiResponse;

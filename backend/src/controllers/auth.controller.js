@@ -25,8 +25,8 @@
  */
 
 import { StatusCodes } from 'http-status-codes';
-import { authService } from '../services/auth.service.js';
-import { emailService } from '../services/email.service.js';
+import authService from '../services/auth.service.js';
+import  emailService  from '../services/email.service.js';
 import { ApiError } from '../utils/apiError.js';
 import { ApiResponse } from '../utils/apiResponse.js';
 import { env } from '../config/env.js';

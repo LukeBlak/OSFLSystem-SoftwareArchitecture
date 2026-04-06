@@ -1,144 +1,192 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Mail, Lock, Eye, EyeOff } from 'lucide-react';
+import {
+    Mail,
+    Lock,
+    Eye,
+    EyeOff,
+    AlertTriangle,
+    ClipboardList,
+    Loader2,
+    ShieldCheck
+} from 'lucide-react';
+import authService from '../../services/authService';
 
-const Login = () => {
+function Login() {
     const navigate = useNavigate();
-    const [showPassword, setShowPassword] = useState(false);
-    const [formData, setFormData] = useState({
-        correo: '',
-        contrasena: ''
-    });
-    const [errors, setErrors] = useState({});
+
+    // ✅ Estados del componente
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [error, setError] = useState(null);
     const [loading, setLoading] = useState(false);
+    const [showPassword, setShowPassword] = useState(false);
 
-    const handleChange = (e) => {
-        const { name, value } = e.target;
-        setFormData(prev => ({ ...prev, [name]: value }));
-        if (errors[name]) {
-            setErrors(prev => ({ ...prev, [name]: '' }));
-        }
-    };
-
-    const validate = () => {
-        const newErrors = {};
-        if (!formData.correo.trim()) {
-            newErrors.correo = 'El correo es obligatorio';
-        } else if (!/\S+@\S+\.\S+/.test(formData.correo)) {
-            newErrors.correo = 'Ingrese un correo válido';
-        }
-        if (!formData.contrasena) {
-            newErrors.contrasena = 'La contraseña es obligatoria';
-        }
-        setErrors(newErrors);
-        return Object.keys(newErrors).length === 0;
-    };
-
+    // ✅ Manejar submit del formulario
     const handleSubmit = async (e) => {
         e.preventDefault();
-        if (!validate()) return;
-
+        setError(null);
         setLoading(true);
+
         try {
-            // API call here
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            alert('Inicio de sesión exitoso');
-            navigate('/');
-        } catch (error) {
-            alert('Error al iniciar sesión: ' + error.message);
+            // Intentar login
+            await authService.login(email, password);
+
+            // Login exitoso - obtener usuario y redirigir
+            const user = authService.getUser();
+            const homePath = authService.getHomeByRole(user?.role) || '/perfil';
+
+            navigate(homePath);
+
+        } catch (err) {
+            console.error('Login error:', err);
+
+            // ✅ Mostrar mensaje amigable (userMessage) o técnico (message)
+            const displayMessage = err.userMessage || err.message || 'Error al iniciar sesión';
+            setError(displayMessage);
+
         } finally {
             setLoading(false);
         }
     };
 
+    // ✅ Toggle para mostrar/ocultar contraseña
+    const togglePasswordVisibility = () => {
+        setShowPassword(!showPassword);
+    };
+
     return (
-        <div className="min-h-screen bg-background flex items-center justify-center p-4">
-            <div className="card w-full max-w-md p-8">
-                {/* Logo y Título */}
-                <div className="text-center mb-8">
-                    <h1 className="font-poppins font-bold text-3xl text-primary-dark mb-2">
-                        SIGEVOL
-                    </h1>
-                    <p className="font-inter text-text-secondary">
-                        Sistema de Gestión de Voluntariados
-                    </p>
-                </div>
+        <div className="min-h-screen  flex items-center justify-center p-4">
+            <div className="w-full max-w-md">
 
-                {/* Formulario */}
-                <form onSubmit={handleSubmit} className="space-y-6">
-                    {/* Correo */}
-                    <div>
-                        <label className="block text-text-primary font-inter font-semibold mb-2">
-                            Correo Electrónico *
-                        </label>
-                        <div className="relative">
-                            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary" size={20} />
-                            <input
-                                type="email"
-                                name="correo"
-                                value={formData.correo}
-                                onChange={handleChange}
-                                className={`input-field pl-10 ${errors.correo ? 'border-red-500' : ''}`}
-                                placeholder="tu@organizacion.org"
-                            />
+                {/* Card Principal */}
+                <div className="bg-white/95 backdrop-blur-sm rounded-3xl shadow-2xl p-8 md:p-10 border border-white/20">
+
+                    {/* Header */}
+                    <div className="text-center mb-8">
+                        <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-teal-500 to-teal-600 rounded-2xl shadow-lg mb-4">
+                            <ShieldCheck className="w-8 h-8 text-white" />
                         </div>
-                        {errors.correo && <p className="mt-1 text-sm text-red-500">{errors.correo}</p>}
+                        <h1 className="text-3xl font-bold bg-gradient-to-r from-teal-600 to-purple-600 bg-clip-text text-transparent">
+                            SIGEVOL
+                        </h1>
+                        <p className="text-gray-500 mt-2 text-sm">
+                            Sistema de Gestión de Voluntariados
+                        </p>
                     </div>
 
-                    {/* Contraseña */}
-                    <div>
-                        <label className="block text-text-primary font-inter font-semibold mb-2">
-                            Contraseña *
-                        </label>
-                        <div className="relative">
-                            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary" size={20} />
-                            <input
-                                type={showPassword ? 'text' : 'password'}
-                                name="contrasena"
-                                value={formData.contrasena}
-                                onChange={handleChange}
-                                className={`input-field pl-10 pr-10 ${errors.contrasena ? 'border-red-500' : ''}`}
-                                placeholder="••••••••"
-                            />
-                            <button
-                                type="button"
-                                onClick={() => setShowPassword(!showPassword)}
-                                className="absolute right-3 top-1/2 -translate-y-1/2 text-text-secondary hover:text-primary"
+                    {/* Mensaje de error */}
+                    {error && (
+                        <div className={`mb-6 p-4 rounded-xl border flex items-start gap-3 ${error.includes('desactivada')
+                                ? 'bg-amber-50 border-amber-200 text-amber-800'
+                                : 'bg-red-50 border-red-200 text-red-800'
+                            }`}>
+                            <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                            <span className="flex-1 text-sm font-medium">{error}</span>
+                            {error.includes('desactivada') && (
+                                <button
+                                    onClick={() => window.location.href = '/contacto'}
+                                    className="text-xs font-semibold underline hover:no-underline flex-shrink-0 ml-2"
+                                >
+                                    Contactar
+                                </button>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Formulario */}
+                    <form onSubmit={handleSubmit} className="space-y-5">
+
+                        {/* Campo Email */}
+                        <div>
+                            <label htmlFor="email" className="block text-sm font-semibold text-gray-700 mb-2">
+                                Correo Electrónico <span className="text-red-500">*</span>
+                            </label>
+                            <div className="relative">
+                                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                                <input
+                                    type="email"
+                                    id="email"
+                                    className="w-full pl-12 pr-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all text-gray-800 placeholder-gray-400"
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
+                                    placeholder="tu@email.com"
+                                    required
+                                    autoComplete="email"
+                                    disabled={loading}
+                                />
+                            </div>
+                        </div>
+
+                        {/* Campo Contraseña */}
+                        <div>
+                            <label htmlFor="password" className="block text-sm font-semibold text-gray-700 mb-2">
+                                Contraseña <span className="text-red-500">*</span>
+                            </label>
+                            <div className="relative">
+                                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                                <input
+                                    type={showPassword ? 'text' : 'password'}
+                                    id="password"
+                                    className="w-full pl-12 pr-12 py-3.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all text-gray-800 placeholder-gray-400"
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    placeholder="••••••••"
+                                    required
+                                    autoComplete="current-password"
+                                    disabled={loading}
+                                />
+                                <button
+                                    type="button"
+                                    onClick={togglePasswordVisibility}
+                                    className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                                    tabIndex="-1"
+                                >
+                                    {showPassword ? (
+                                        <EyeOff className="w-5 h-5" />
+                                    ) : (
+                                        <Eye className="w-5 h-5" />
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Olvidaste tu contraseña */}
+                        <div className="flex justify-end">
+                            <a
+                                href="/recuperar-password"
+                                onClick={(e) => {
+                                    e.preventDefault();
+                                    navigate('/recuperar-password');
+                                }}
+                                className="text-sm font-medium text-teal-600 hover:text-teal-700 transition-colors"
                             >
-                                {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
-                            </button>
+                                ¿Olvidaste tu contraseña?
+                            </a>
                         </div>
-                        {errors.contrasena && <p className="mt-1 text-sm text-red-500">{errors.contrasena}</p>}
-                    </div>
 
-                    {/* Olvidaste contraseña */}
-                    <div className="text-right">
-                        <a href="#" className="text-sm text-primary hover:text-primary-dark font-inter">
-                            ¿Olvidaste tu contraseña?
-                        </a>
-                    </div>
+                        {/* Botón de login */}
+                        <button
+                            type="submit"
+                            disabled={loading}
+                            className="w-full bg-gradient-to-r from-teal-600 to-teal-500 hover:from-teal-700 hover:to-teal-600 disabled:from-gray-400 disabled:to-gray-500 text-white font-semibold py-4 px-6 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 flex items-center justify-center gap-2"
+                        >
+                            {loading ? (
+                                <>
+                                    <Loader2 className="w-5 h-5 animate-spin" />
+                                    Iniciando sesión...
+                                </>
+                            ) : (
+                                'Iniciar Sesión'
+                            )}
+                        </button>
+                    </form>
 
-                    {/* Botón Submit */}
-                    <button
-                        type="submit"
-                        disabled={loading}
-                        className="btn-primary w-full"
-                    >
-                        {loading ? 'Iniciando sesión...' : 'Iniciar Sesión'}
-                    </button>
-                </form>
-
-                {/* Datos de prueba */}
-                <div className="mt-6 p-4 bg-stats-lighter rounded-lg">
-                    <p className="text-xs text-text-secondary font-inter mb-2">📋 Datos de prueba:</p>
-                    <p className="text-xs text-text-primary font-inter">
-                        Correo: admin@sigevol.org<br />
-                        Contraseña: admin123
-                    </p>
                 </div>
+
             </div>
         </div>
     );
-};
+}
 
 export default Login;

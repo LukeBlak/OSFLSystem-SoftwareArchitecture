@@ -5,6 +5,8 @@ import morgan from 'morgan';
 import { env } from './config/env.js';
 import { logger } from './utils/logger.js';
 import { requestContextMiddleware } from './utils/requestContext.js';
+import authRoutes from './routes/auth.routes.js';
+import { errorHandler, notFoundHandler } from './middleware/errorHandler.middleware.js';
 
 const app = express();
 
@@ -40,19 +42,13 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Error handler básico
-app.use((err, req, res, next) => {
-  logger.error('Error no manejado', {
-    message: err.message,
-    stack: err.stack,
-  });
-  
-  res.status(500).json({
-    success: false,
-    error: {
-      message: 'Error interno del servidor',
-    },
-  });
-});
+// Compatibilidad: mantener /api/login y también exponer /api/auth/login.
+app.use('/api', authRoutes);
+app.use('/api/auth', authRoutes);
+
+// Manejo consistente de rutas no encontradas y errores en formato JSON.
+app.use(notFoundHandler);
+app.use(errorHandler);
+
 
 export default app;

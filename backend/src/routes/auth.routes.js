@@ -41,6 +41,12 @@ import {
 } from '../validators/auth.validator.js';
 import { rateLimit } from 'express-rate-limit';
 
+console.log('🔍 authController:', authController);
+console.log('🔍 authController.login:', typeof authController?.login);
+console.log('🔍 authController.register:', typeof authController?.register);
+console.log('🔍 authController.forgotPassword:', typeof authController?.forgottenPassword);
+console.log('🔍 validate(loginSchema):', typeof validate(loginSchema));
+
 // =============================================================================
 // CONFIGURACIÓN DEL ROUTER
 // =============================================================================
@@ -305,7 +311,7 @@ router.post(
   '/forgot-password',
   passwordResetLimiter,
   validate(forgotPasswordSchema),
-  authController.forgotPassword
+  authController.forgottenPassword
 );
 
 /**
@@ -368,10 +374,10 @@ router.post(
  * @returns {Object} 400 - Token inválido
  * @returns {Object} 404 - Token no encontrado
  */
-router.get(
-  '/verify-email',
-  authController.verifyEmail
-);
+//router.get(
+  //'/verify-email',
+  //authController.verifyEmail
+//);
 
 // =============================================================================
 // RUTAS PROTEGIDAS (Requieren autenticación)
@@ -525,10 +531,10 @@ router.put(
  * @returns {Object} 200 - Nuevo token de acceso
  * @returns {Object} 401 - Refresh token inválido o expirado
  */
-router.post(
-  '/refresh',
-  authController.refreshToken
-);
+//router.post(
+  //'/refresh',
+  //authController.refreshToken
+//);
 
 /**
  * -----------------------------------------------------------------------------
@@ -544,11 +550,11 @@ router.post(
  * @returns {Object} 200 - Todos los tokens revocados
  * @returns {Object} 401 - No autenticado
  */
-router.post(
-  '/revoke-all',
-  authenticate,
-  authController.revokeAllTokens
-);
+//router.post(
+  //'/revoke-all',
+  //authenticate,
+  //authController.revokeAllTokens
+//);
 
 // =============================================================================
 // RUTAS DE ADMINISTRACIÓN (Solo para admins)
@@ -575,12 +581,12 @@ router.post(
  * @returns {Object} 401 - No autenticado
  * @returns {Object} 403 - No tiene permisos de admin
  */
-router.get(
-  '/users',
-  authenticate,
-  requireRole([ROLES.ADMIN, ROLES.SUPER_ADMIN]),
-  authController.listUsers
-);
+//router.get(
+  //'/users',
+  //authenticate,
+  //requireRole([ROLES.ADMIN, ROLES.SUPER_ADMIN]),
+  //authController.listUsers
+//);
 
 /**
  * -----------------------------------------------------------------------------
@@ -600,12 +606,12 @@ router.get(
  * @returns {Object} 403 - No tiene permisos de admin
  * @returns {Object} 404 - Usuario no encontrado
  */
-router.put(
-  '/users/:id/deactivate',
-  authenticate,
-  requireRole([ROLES.ADMIN, ROLES.SUPER_ADMIN]),
-  authController.deactivateUser
-);
+//router.put(
+ // '/users/:id/deactivate',
+ // authenticate,
+ // requireRole([ROLES.ADMIN, ROLES.SUPER_ADMIN]),
+ // authController.deactivateUser
+//);
 
 /**
  * -----------------------------------------------------------------------------
@@ -625,12 +631,12 @@ router.put(
  * @returns {Object} 403 - No tiene permisos de admin
  * @returns {Object} 404 - Usuario no encontrado
  */
-router.put(
-  '/users/:id/activate',
-  authenticate,
-  requireRole([ROLES.ADMIN, ROLES.SUPER_ADMIN]),
-  authController.activateUser
-);
+//router.put(
+  //'/users/:id/activate',
+  //authenticate,
+  //requireRole([ROLES.ADMIN, ROLES.SUPER_ADMIN]),
+  //authController.activateUser
+//);
 
 // =============================================================================
 // EXPORTACIÓN DEL ROUTER

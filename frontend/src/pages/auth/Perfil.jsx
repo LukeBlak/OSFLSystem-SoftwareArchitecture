@@ -1,235 +1,165 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { User, Mail, Phone, Camera, Save, X } from 'lucide-react';
+import authService from '../../services/authService';
 
-const Perfil = () => {
-    const navigate = useNavigate();
-    const [editando, setEditando] = useState(false);
-    const [formData, setFormData] = useState({
-        nombre: 'María González',
-        correo: 'maria@esperanza.org',
-        telefono: '7000-0000',
-        rol: 'Líder de Organización',
-        organizacion: 'Fundación Esperanza',
-        foto: null
-    });
-    const [errors, setErrors] = useState({});
-    const [loading, setLoading] = useState(false);
+function Perfil() {
+  const navigate = useNavigate();
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-    const handleChange = (e) => {
-        const { name, value } = e.target;
-        setFormData(prev => ({ ...prev, [name]: value }));
-        if (errors[name]) {
-            setErrors(prev => ({ ...prev, [name]: '' }));
-        }
-    };
+  useEffect(() => {
+    loadUserProfile();
+  }, []);
 
-    const handleFileChange = (e) => {
-        const file = e.target.files[0];
-        if (file) {
-            const validTypes = ['image/jpeg', 'image/jpg', 'image/png'];
-            if (!validTypes.includes(file.type)) {
-                setErrors(prev => ({
-                    ...prev,
-                    foto: 'Solo se permiten archivos JPG o PNG'
-                }));
-                return;
-            }
-            if (file.size > 2 * 1024 * 1024) {
-                setErrors(prev => ({
-                    ...prev,
-                    foto: 'El archivo no debe superar los 2MB'
-                }));
-                return;
-            }
-            setFormData(prev => ({ ...prev, foto: file }));
-        }
-    };
+  const loadUserProfile = async () => {
+    try {
+      const currentUser = authService.getUser();
+      if (!currentUser) {
+        navigate('/login');
+        return;
+      }
+      setUser(currentUser);
+    } catch (err) {
+      console.error('Error loading profile:', err);
+      setError('Error al cargar el perfil');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    const validate = () => {
-        const newErrors = {};
-        if (!formData.nombre.trim()) {
-            newErrors.nombre = 'El nombre es obligatorio';
-        }
-        if (!formData.correo.trim() || !/\S+@\S+\.\S+/.test(formData.correo)) {
-            newErrors.correo = 'Ingrese un correo válido';
-        }
-        if (!formData.telefono.trim()) {
-            newErrors.telefono = 'El teléfono es obligatorio';
-        }
-        setErrors(newErrors);
-        return Object.keys(newErrors).length === 0;
-    };
+  const handleLogout = async () => {
+    try {
+      await authService.logout();
+      navigate('/login');
+    } catch (err) {
+      console.error('Logout error:', err);
+      authService.clearSession();
+      navigate('/login');
+    }
+  };
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        if (!validate()) return;
-
-        setLoading(true);
-        try {
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            alert('Perfil actualizado exitosamente');
-            setEditando(false);
-        } catch (error) {
-            alert('Error al actualizar perfil: ' + error.message);
-        } finally {
-            setLoading(false);
-        }
-    };
-
+  // 🔄 Loading state
+  if (loading) {
     return (
-        <div className="container mx-auto p-6 max-w-4xl">
-            <div className="card p-8">
-                <div className="flex items-center justify-between mb-6">
-                    <h2 className="font-poppins font-bold text-2xl text-text-primary">
-                        Mi Perfil
-                    </h2>
-                    {!editando ? (
-                        <button
-                            onClick={() => setEditando(true)}
-                            className="btn-primary"
-                        >
-                            Editar Perfil
-                        </button>
-                    ) : (
-                        <button
-                            onClick={() => {
-                                setEditando(false);
-                                setErrors({});
-                            }}
-                            className="btn-outline"
-                        >
-                            Cancelar
-                        </button>
-                    )}
-                </div>
-
-                <form onSubmit={handleSubmit} className="space-y-6">
-                    {/* Foto de Perfil */}
-                    <div className="flex items-center gap-6">
-                        <div className="w-24 h-24 rounded-full bg-primary-lighter flex items-center justify-center">
-                            {formData.foto ? (
-                                <img
-                                    src={URL.createObjectURL(formData.foto)}
-                                    alt="Foto"
-                                    className="w-full h-full rounded-full object-cover"
-                                />
-                            ) : (
-                                <User size={48} className="text-primary" />
-                            )}
-                        </div>
-                        {editando && (
-                            <div>
-                                <label className="btn-outline flex items-center gap-2 cursor-pointer">
-                                    <Camera size={18} />
-                                    Cambiar Foto
-                                    <input
-                                        type="file"
-                                        onChange={handleFileChange}
-                                        accept=".jpg,.jpeg,.png"
-                                        className="hidden"
-                                    />
-                                </label>
-                                {errors.foto && <p className="mt-1 text-sm text-red-500">{errors.foto}</p>}
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Campos */}
-                    <div className="grid md:grid-cols-2 gap-6">
-                        <div>
-                            <label className="block text-text-primary font-inter font-semibold mb-2">
-                                Nombre Completo *
-                            </label>
-                            <input
-                                type="text"
-                                name="nombre"
-                                value={formData.nombre}
-                                onChange={handleChange}
-                                className={`input-field ${errors.nombre ? 'border-red-500' : ''}`}
-                                disabled={!editando}
-                            />
-                            {errors.nombre && <p className="mt-1 text-sm text-red-500">{errors.nombre}</p>}
-                        </div>
-
-                        <div>
-                            <label className="block text-text-primary font-inter font-semibold mb-2">
-                                Correo Electrónico *
-                            </label>
-                            <div className="relative">
-                                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary" size={18} />
-                                <input
-                                    type="email"
-                                    name="correo"
-                                    value={formData.correo}
-                                    onChange={handleChange}
-                                    className={`input-field pl-10 ${errors.correo ? 'border-red-500' : ''}`}
-                                    disabled={!editando}
-                                />
-                            </div>
-                            {errors.correo && <p className="mt-1 text-sm text-red-500">{errors.correo}</p>}
-                        </div>
-
-                        <div>
-                            <label className="block text-text-primary font-inter font-semibold mb-2">
-                                Teléfono *
-                            </label>
-                            <div className="relative">
-                                <Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary" size={18} />
-                                <input
-                                    type="tel"
-                                    name="telefono"
-                                    value={formData.telefono}
-                                    onChange={handleChange}
-                                    className={`input-field pl-10 ${errors.telefono ? 'border-red-500' : ''}`}
-                                    disabled={!editando}
-                                />
-                            </div>
-                            {errors.telefono && <p className="mt-1 text-sm text-red-500">{errors.telefono}</p>}
-                        </div>
-
-                        <div>
-                            <label className="block text-text-primary font-inter font-semibold mb-2">
-                                Rol
-                            </label>
-                            <input
-                                type="text"
-                                value={formData.rol}
-                                className="input-field bg-gray-50"
-                                disabled
-                            />
-                        </div>
-
-                        <div className="md:col-span-2">
-                            <label className="block text-text-primary font-inter font-semibold mb-2">
-                                Organización
-                            </label>
-                            <input
-                                type="text"
-                                value={formData.organizacion}
-                                className="input-field bg-gray-50"
-                                disabled
-                            />
-                        </div>
-                    </div>
-
-                    {/* Botones */}
-                    {editando && (
-                        <div className="flex gap-4 pt-4">
-                            <button
-                                type="submit"
-                                disabled={loading}
-                                className="btn-primary flex items-center gap-2"
-                            >
-                                <Save size={18} />
-                                {loading ? 'Guardando...' : 'Guardar Cambios'}
-                            </button>
-                        </div>
-                    )}
-                </form>
-            </div>
+      <div className="min-h-screen bg-gradient-to-br from-indigo-600 to-purple-700 flex items-center justify-center p-6">
+        <div className="bg-white rounded-2xl shadow-xl p-8 text-center max-w-sm w-full">
+          <div className="w-12 h-12 border-4 border-gray-200 border-t-teal-500 rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600 font-medium">Cargando perfil...</p>
         </div>
+      </div>
     );
-};
+  }
+
+  // 🚨 Error state
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-indigo-600 to-purple-700 flex items-center justify-center p-6">
+        <div className="bg-white rounded-2xl shadow-xl p-8 text-center max-w-sm w-full">
+          <p className="text-red-600 font-medium mb-4">⚠️ {error}</p>
+          <button
+            onClick={() => navigate('/login')}
+            className="bg-teal-600 hover:bg-teal-700 text-white font-semibold py-2 px-6 rounded-lg transition-colors"
+          >
+            Volver al login
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // 🎨 Helper para colores de badges según rol
+  const getRoleBadgeClass = (role) => {
+    switch (role) {
+      case 'admin': return 'bg-red-100 text-red-700';
+      case 'super_admin': return 'bg-amber-100 text-amber-700';
+      case 'miembro': return 'bg-blue-100 text-blue-700';
+      case 'lider_organizacion':
+      case 'lider_comite': return 'bg-emerald-100 text-emerald-700';
+      default: return 'bg-gray-100 text-gray-700';
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-indigo-600 to-purple-700 p-6 md:p-10">
+      {/* Header */}
+      <div className="max-w-3xl mx-auto mb-8 flex flex-col sm:flex-row justify-between items-center gap-4">
+        <h1 className="text-3xl md:text-4xl font-bold text-white">Mi Perfil</h1>
+        <button
+          onClick={handleLogout}
+          className="bg-white/20 hover:bg-white hover:text-indigo-600 text-white font-semibold py-2.5 px-6 rounded-lg border-2 border-white backdrop-blur-sm transition-all duration-300"
+        >
+          Cerrar Sesión
+        </button>
+      </div>
+
+      {/* Profile Card */}
+      <div className="bg-white rounded-2xl shadow-2xl p-6 md:p-10 max-w-3xl mx-auto mb-8">
+        {/* Avatar */}
+        <div className="flex justify-center mb-8">
+          <div className="w-28 h-28 bg-gradient-to-br from-teal-500 to-teal-600 rounded-full flex items-center justify-center text-4xl font-bold text-white border-4 border-gray-100 shadow-lg">
+            {user?.profile?.nombre?.charAt(0)?.toUpperCase() || user?.email?.charAt(0)?.toUpperCase() || 'U'}
+          </div>
+        </div>
+
+        {/* Info Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <div className="bg-gray-50 p-4 rounded-xl">
+            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Nombre</label>
+            <p className="text-lg font-medium text-gray-800 mt-1">{user?.profile?.nombre || 'No especificado'}</p>
+          </div>
+
+          <div className="bg-gray-50 p-4 rounded-xl">
+            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Apellido</label>
+            <p className="text-lg font-medium text-gray-800 mt-1">{user?.profile?.apellido || 'No especificado'}</p>
+          </div>
+
+          <div className="bg-gray-50 p-4 rounded-xl">
+            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Email</label>
+            <p className="text-lg font-medium text-gray-800 mt-1 break-all">{user?.email}</p>
+          </div>
+
+          <div className="bg-gray-50 p-4 rounded-xl">
+            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Rol</label>
+            <span className={`inline-block mt-2 px-3 py-1 rounded-full text-sm font-semibold ${getRoleBadgeClass(user?.role)}`}>
+              {user?.role || 'Sin rol'}
+            </span>
+          </div>
+
+          <div className="bg-gray-50 p-4 rounded-xl">
+            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Estado</label>
+            <span className={`inline-block mt-2 px-3 py-1 rounded-full text-sm font-semibold ${user?.isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
+              {user?.isActive ? 'Activo' : 'Inactivo'}
+            </span>
+          </div>
+
+          {user?.organizationId && (
+            <div className="bg-gray-50 p-4 rounded-xl">
+              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Organización</label>
+              <p className="text-lg font-medium text-gray-800 mt-1">{user.organizationId}</p>
+            </div>
+          )}
+
+          <div className="bg-gray-50 p-4 rounded-xl md:col-span-2">
+            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Último acceso</label>
+            <p className="text-lg font-medium text-gray-800 mt-1">
+              {user?.lastSignInAt ? new Date(user.lastSignInAt).toLocaleString('es-ES') : 'Nunca'}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Actions */}
+      <div className="max-w-3xl mx-auto flex flex-col sm:flex-row gap-4 justify-center">
+        <button className="flex-1 bg-gradient-to-r from-teal-600 to-teal-500 hover:from-teal-700 hover:to-teal-600 text-white font-semibold py-3 px-6 rounded-lg shadow-md hover:shadow-lg transition-all duration-300">
+          Editar Perfil
+        </button>
+        <button className="flex-1 bg-white hover:bg-teal-50 text-teal-600 border-2 border-teal-600 font-semibold py-3 px-6 rounded-lg shadow-sm hover:shadow-md transition-all duration-300">
+          Cambiar Contraseña
+        </button>
+      </div>
+    </div>
+  );
+}
 
 export default Perfil;

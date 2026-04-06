@@ -288,7 +288,12 @@ export const login = async ({ email, password }) => {
     // =========================================================================
     // 3. VERIFICAR ESTADO DE LA CUENTA
     // =========================================================================
-    const publicUser = await UserRepository.findById(authUser.id);
+    let publicUser = await UserRepository.findById(authUser.id);
+
+    // Fallback para datos legacy donde el perfil público no quedó vinculado por id.
+    if (!publicUser && authUser.email) {
+      publicUser = await UserRepository.findByEmail(authUser.email);
+    }
 
     if (!publicUser) {
       logger.warn('Usuario autenticado pero sin perfil público', {
@@ -298,7 +303,9 @@ export const login = async ({ email, password }) => {
       throw ApiError.forbidden('Perfil de usuario no encontrado');
     }
 
-    if (!publicUser.isActive) {
+    const isActive = publicUser.isActive ?? publicUser.estadoActivo ?? true;
+
+    if (!isActive) {
       logger.warn('Intento de login de cuenta desactivada', {
         userId: authUser.id,
         email: authUser.email,

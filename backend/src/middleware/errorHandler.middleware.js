@@ -23,6 +23,7 @@
  */
 
 import { StatusCodes, getReasonPhrase } from 'http-status-codes';
+import multer from 'multer';
 import { env, isDevelopment, isProduction, isTest } from '../config/env.js';
 import { logger } from '../utils/logger.js';
 import { ApiResponse } from '../utils/apiResponse.js';
