@@ -392,7 +392,7 @@ export const forgottenPassword = async (req, res, next) => {
     // =========================================================================
     if (user) {
       // Construir URL de reset (frontend URL + token)
-      const resetUrl = `${env.FRONTEND_URL}/reset-password?token=${resetToken}`;
+      const resetUrl = `${env.FRONTEND_URL}/recuperar-password?token=${resetToken}`;
 
       // Enviar email con el link de reset
       await emailService.sendPasswordResetEmail({
