@@ -26,7 +26,7 @@
  */
 
 import { StatusCodes } from 'http-status-codes';
-import { organizationService } from '../services/organization.service.js';
+import organizationService from '../services/organization.service.js';
 import { ApiError } from '../utils/apiError.js';
 import { ApiResponse } from '../utils/apiResponse.js';
 
@@ -902,6 +902,67 @@ export const getOrganizationCommittees = async (req, res, next) => {
   }
 };
 
+/**
+ * Obtener proyectos de una organización.
+ */
+export const getOrganizationProjects = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { estado, page = '1', limit = '10' } = req.query;
+
+    const result = await organizationService.getOrganizationProjects(
+      id,
+      { estado: estado || null },
+      {
+        page: parseInt(page, 10),
+        limit: parseInt(limit, 10),
+      },
+      req.user
+    );
+
+    return res.status(StatusCodes.OK).json(
+      new ApiResponse(
+        StatusCodes.OK,
+        {
+          projects: result.projects,
+          pagination: result.pagination,
+        },
+        'Proyectos obtenidos exitosamente'
+      )
+    );
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Obtener resumen financiero de una organización.
+ */
+export const getOrganizationFinances = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { periodo } = req.query;
+
+    const result = await organizationService.getOrganizationFinances(
+      id,
+      { periodo: periodo || null },
+      req.user
+    );
+
+    return res.status(StatusCodes.OK).json(
+      new ApiResponse(
+        StatusCodes.OK,
+        {
+          finances: result,
+        },
+        'Finanzas obtenidas exitosamente'
+      )
+    );
+  } catch (error) {
+    next(error);
+  }
+};
+
 // =============================================================================
 // EXPORTACIÓN POR DEFECTO
 // =============================================================================
@@ -932,4 +993,6 @@ export default {
   getOrganizationStats,
   getOrganizationMembers,
   getOrganizationCommittees,
+  getOrganizationProjects,
+  getOrganizationFinances,
 };

@@ -2,10 +2,15 @@ import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { User, LogOut, ChevronDown, Home, Building2, Calendar } from 'lucide-react';
 import logo from '../assets/logo.png';
+import authService from '../services/authService';
 
 const Navbar = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const role = authService.getUser()?.role;
+  const normalizedRole = String(role || '').toLowerCase();
+  const hideManagementMenus = normalizedRole === 'super_admin';
+  const homePath = role === 'super_admin' ? '/admin' : '/';
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showEstructuraMenu, setShowEstructuraMenu] = useState(false);
 
@@ -34,7 +39,7 @@ const Navbar = () => {
             
             <div 
               className="flex flex-col cursor-pointer"
-              onClick={() => navigate('/')}
+              onClick={() => navigate(homePath)}
             >
               <h1 className="font-poppins font-bold text-2xl text-text-light">
                 SIGEVOL - Actividades
@@ -50,9 +55,9 @@ const Navbar = () => {
             
             {/* Inicio */}
             <button
-              onClick={() => navigate('/')}
+              onClick={() => navigate(homePath)}
               className={`nav-link flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
-                location.pathname === '/' ? 'bg-white/10' : 'hover:bg-white/10'
+                location.pathname === homePath ? 'bg-white/10' : 'hover:bg-white/10'
               }`}
             >
               <Home size={18} />
@@ -60,6 +65,7 @@ const Navbar = () => {
             </button>
 
             {/* Estructura (Dropdown) - RUTAS CORRECTAS DEL SEGUNDO APP */}
+            {!hideManagementMenus && (
             <div className="relative">
               <button
                 onClick={() => setShowEstructuraMenu(!showEstructuraMenu)}
@@ -85,7 +91,7 @@ const Navbar = () => {
                   </div>
                   <button
                     onClick={() => {
-                      navigate('/estructura/organizaciones');
+                      navigate(role === 'super_admin' ? '/admin/organizaciones' : '/estructura/organizaciones');
                       setShowEstructuraMenu(false);
                     }}
                     className="w-full text-left px-4 py-2 text-text-primary font-inter hover:bg-gray-50 transition-colors flex items-center gap-2"
@@ -112,7 +118,7 @@ const Navbar = () => {
                   </div>
                   <button
                     onClick={() => {
-                      navigate('/estructura/miembros');
+                      navigate(role === 'super_admin' ? '/admin/usuarios' : '/estructura/miembros');
                       setShowEstructuraMenu(false);
                     }}
                     className="w-full text-left px-4 py-2 text-text-primary font-inter hover:bg-gray-50 transition-colors flex items-center gap-2"
@@ -180,8 +186,10 @@ const Navbar = () => {
                 </div>
               )}
             </div>
+            )}
 
             {/* Actividades */}
+            {!hideManagementMenus && (
             <button 
               onClick={() => navigate('/')}
               className={`nav-link flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
@@ -191,6 +199,7 @@ const Navbar = () => {
               <Calendar size={18} />
               Actividades
             </button>
+            )}
           </div>
 
           {/* Perfil Dropdown */}

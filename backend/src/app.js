@@ -6,6 +6,7 @@ import { env } from './config/env.js';
 import { logger } from './utils/logger.js';
 import { requestContextMiddleware } from './utils/requestContext.js';
 import authRoutes from './routes/auth.routes.js';
+import apiRoutes from './routes/index.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.middleware.js';
 
 const app = express();
@@ -42,7 +43,10 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Compatibilidad: mantener /api/login y también exponer /api/auth/login.
+// Rutas principales del dominio (projects, finance, hours, committees, etc.)
+app.use('/api', apiRoutes);
+
+// Rutas de autenticación con alias de compatibilidad.
 app.use('/api', authRoutes);
 app.use('/api/auth', authRoutes);
 

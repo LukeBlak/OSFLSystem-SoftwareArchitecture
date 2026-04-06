@@ -32,6 +32,28 @@ export const UserRepository = {
     return { data, error };
   },
 
+  async updateById(userId, payload) {
+    const { data, error } = await getDb()
+      .from(TABLE)
+      .update(payload)
+      .eq('id', userId)
+      .select('*')
+      .single();
+
+    return { data, error };
+  },
+
+  async deleteById(userId) {
+    const { data, error } = await getDb()
+      .from(TABLE)
+      .delete()
+      .eq('id', userId)
+      .select('*')
+      .single();
+
+    return { data, error };
+  },
+
   async findById(userId) {
     const { data, error } = await getDb()
       .from(TABLE)

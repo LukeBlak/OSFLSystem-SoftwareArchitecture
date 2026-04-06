@@ -456,11 +456,38 @@ export const validateUserId = (id) => {
  */
 export const formatUserForResponse = (user) => {
   if (!user) return null;
+
+  const technicalRoles = new Set(['authenticated', 'anon', 'service_role']);
+  const roleCandidates = [
+    user.role,
+    user.rol,
+    user.user_metadata?.role,
+    user.app_metadata?.role,
+    user.raw_user_meta_data?.role,
+    user.raw_app_meta_data?.role,
+  ]
+    .filter(Boolean)
+    .map((value) => String(value).toLowerCase());
+
+  const resolvedRole = roleCandidates.find((candidate) => !technicalRoles.has(candidate))
+    || USER_ROLES.MIEMBRO;
+
+  const resolvedOrganizationId = (
+    user.organizationId
+    || user.organizacionId
+    || user.organization_id
+    || user.organizacion_id
+    || user.user_metadata?.organizationId
+    || user.user_metadata?.organization_id
+    || user.raw_user_meta_data?.organizationId
+    || user.raw_user_meta_data?.organization_id
+    || null
+  );
   
   return {
     id: user.id,
     email: user.email,
-    role: user.role,
+    role: String(resolvedRole).toLowerCase(),
     profile: {
       nombre: user.profile?.nombre || user.nombre || null,
       apellido: user.profile?.apellido || user.apellido || null,
@@ -469,7 +496,7 @@ export const formatUserForResponse = (user) => {
       direccion: user.profile?.direccion || user.direccion || null,
       fechaNacimiento: user.profile?.fechaNacimiento || user.fechanacimiento || null,
     },
-    organizationId: user.organizationId || user.organizacionId || null,
+    organizationId: resolvedOrganizationId,
     isActive: user.isActive ?? user.estadoActivo ?? true,
     emailVerified: user.emailVerified ?? user.email_confirmed_at !== null,
     createdAt: user.createdAt || user.fecha_creacion,

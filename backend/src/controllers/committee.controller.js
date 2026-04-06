@@ -26,7 +26,7 @@
  */
 
 import { StatusCodes } from 'http-status-codes';
-import { committeeService } from '../services/committee.service.js';
+import committeeService from '../services/committee.service.js';
 import { ApiError } from '../utils/apiError.js';
 import { ApiResponse } from '../utils/apiResponse.js';
 
@@ -916,6 +916,33 @@ export const getCommitteeMembers = async (req, res, next) => {
   }
 };
 
+export const getCommitteeProjects = async (req, res, next) => {
+  try {
+    const { id: committeeId } = req.params;
+    const { estado, page = 1, limit = 10 } = req.query;
+
+    const result = await committeeService.getCommitteeProjects(
+      committeeId,
+      { estado: estado || null },
+      { page, limit }
+    );
+
+    return res.status(StatusCodes.OK).json(
+      new ApiResponse(
+        StatusCodes.OK,
+        {
+          comiteId: committeeId,
+          projects: result.projects,
+        },
+        'Proyectos del comité obtenidos exitosamente',
+        { pagination: result.pagination }
+      )
+    );
+  } catch (error) {
+    next(error);
+  }
+};
+
 // =============================================================================
 // EXPORTACIÓN POR DEFECTO
 // =============================================================================
@@ -943,6 +970,9 @@ export default {
   updateCommittee,
   deactivateCommittee,
   assignLeader,
+  addMember,
+  removeMember,
   getCommitteeStats,
   getCommitteeMembers,
+  getCommitteeProjects,
 };

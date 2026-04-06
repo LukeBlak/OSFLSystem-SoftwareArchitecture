@@ -78,6 +78,64 @@ const SALT_ROUNDS = BCRYPT_SALT_ROUNDS;
  * @constant {number}
  */
 const TOKEN_LENGTH = TOKEN_BYTE_LENGTH;
+const TECHNICAL_ROLES = new Set(['authenticated', 'anon', 'service_role']);
+const ROLE_DOMAIN_TABLES = {
+  [USER_ROLES.SUPER_ADMIN]: 'super_admin',
+  [USER_ROLES.ADMIN]: null,
+  [USER_ROLES.LIDER_ORGANIZACION]: 'lider_organizacion',
+  [USER_ROLES.LIDER_COMITE]: 'lider_comite',
+  [USER_ROLES.MIEMBRO]: 'miembro',
+};
+
+const pickBusinessRole = (candidates = []) => {
+  const normalized = candidates
+    .filter(Boolean)
+    .map((value) => String(value).toLowerCase());
+
+  return normalized.find((candidate) => !TECHNICAL_ROLES.has(candidate)) || null;
+};
+
+const resolveRoleFromDomainTables = async (userId) => {
+  const checks = [
+    { table: 'super_admin', role: USER_ROLES.SUPER_ADMIN },
+    { table: 'lider_organizacion', role: USER_ROLES.LIDER_ORGANIZACION },
+    { table: 'lider_comite', role: USER_ROLES.LIDER_COMITE },
+    { table: 'miembro', role: USER_ROLES.MIEMBRO },
+  ];
+
+  for (const check of checks) {
+    const { data, error } = await supabaseAdmin
+      .from(check.table)
+      .select('id')
+      .eq('id', userId)
+      .limit(1)
+      .maybeSingle();
+
+    if (!error && data) {
+      return check.role;
+    }
+  }
+
+  return null;
+};
+
+const resolveBusinessRole = async (authUser, publicUser) => {
+  const directRole = pickBusinessRole([
+    publicUser?.role,
+    publicUser?.rol,
+    authUser?.user_metadata?.role,
+    authUser?.app_metadata?.role,
+    authUser?.raw_user_meta_data?.role,
+    authUser?.raw_app_meta_data?.role,
+  ]);
+
+  if (directRole) {
+    return directRole;
+  }
+
+  const roleFromTables = await resolveRoleFromDomainTables(authUser?.id);
+  return roleFromTables || USER_ROLES.MIEMBRO;
+};
 
 // =============================================================================
 // FUNCIONES DEL SERVICIO
@@ -188,7 +246,27 @@ export const register = async ({ email, password, role, profile, organizationId 
       isActive: true,
     };
 
-    const { data: publicUser, error: publicError } = await UserRepository.create(userProfile);
+    let publicUser = null;
+    let publicError = null;
+
+    const existingPublicUser = await UserRepository.findById(authUser.user.id);
+
+    if (existingPublicUser?.data) {
+      const updateResult = await UserRepository.updateById(authUser.user.id, {
+        email: authUser.user.email,
+        role,
+        profile: profile || {},
+        organizationId: organizationId || null,
+        isActive: true,
+      });
+
+      publicUser = updateResult.data;
+      publicError = updateResult.error;
+    } else {
+      const createResult = await UserRepository.create(userProfile);
+      publicUser = createResult.data;
+      publicError = createResult.error;
+    }
 
     if (publicError) {
       logger.error('Error al crear perfil público de usuario', {
@@ -202,6 +280,21 @@ export const register = async ({ email, password, role, profile, organizationId 
       throw ApiError.internal('Error al completar el registro del usuario');
     }
 
+    const domainTable = ROLE_DOMAIN_TABLES[role];
+    if (domainTable) {
+      const { error: domainError } = await supabaseAdmin
+        .from(domainTable)
+        .insert({ id: authUser.user.id });
+
+      if (domainError) {
+        logger.warn('No se pudo crear registro de rol en tabla de dominio (continuando con usuario base)', {
+          error: domainError,
+          userId: authUser.user.id,
+          role,
+        });
+      }
+    }
+
     // =========================================================================
     // 6. RETORNAR USUARIO SIN DATOS SENSIBLES
     // =========================================================================
@@ -211,9 +304,12 @@ export const register = async ({ email, password, role, profile, organizationId 
       role,
     });
 
+    const resolvedRole = await resolveBusinessRole(authUser.user, publicUser);
+
     return formatUserForResponse({
-      ...publicUser,
       ...authUser.user,
+      ...publicUser,
+      role: resolvedRole,
     });
 
   } catch (error) {
@@ -278,7 +374,16 @@ export const login = async ({ email, password }) => {
       logger.warn('Intento de login fallido', {
         email,
         error: authError?.message,
+        code: authError?.code,
+        status: authError?.status,
       });
+
+      if (authError?.status >= 500 || authError?.code === 'unexpected_failure') {
+        throw ApiError.internal('Error interno de autenticación', {
+          details: authError?.message || 'Supabase Auth devolvió un error interno',
+        });
+      }
+
       throw ApiError.unauthorized('Credenciales inválidas');
     }
 
@@ -334,16 +439,19 @@ export const login = async ({ email, password }) => {
     // =========================================================================
     // 6. RETORNAR USUARIO Y TOKEN
     // =========================================================================
+    const resolvedRole = await resolveBusinessRole(authUser, publicUser);
+
     logger.info('Login exitoso', {
       userId: authUser.id,
       email: authUser.email,
-      role: authUser.user_metadata?.role || publicUser.role,
+      role: resolvedRole,
     });
 
     return {
       user: formatUserForResponse({
-        ...publicUser,
         ...authUser,
+        ...publicUser,
+        role: resolvedRole,
       }),
       token,
       refreshToken: session?.refresh_token,

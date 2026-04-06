@@ -27,7 +27,7 @@
 
 import { StatusCodes } from 'http-status-codes';
 import { profileService } from '../services/profile.service.js';
-import { cloudinaryService } from '../services/cloudinary.service.js';
+import cloudinaryService from '../services/cloudinary.service.js';
 import { ApiError } from '../utils/apiError.js';
 import { ApiResponse } from '../utils/apiResponse.js';
 
@@ -718,6 +718,100 @@ export const deactivateAccount = async (req, res, next) => {
   }
 };
 
+export const listUsers = async (req, res, next) => {
+  try {
+    const { page = 1, limit = 50, search = '' } = req.query;
+
+    const result = await profileService.listUsers({ page, limit, search });
+
+    return res.status(StatusCodes.OK).json(
+      new ApiResponse(
+        StatusCodes.OK,
+        {
+          users: result.users,
+          pagination: result.pagination,
+        },
+        'Usuarios obtenidos exitosamente'
+      )
+    );
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const createUser = async (req, res, next) => {
+  try {
+    const { email, password, role, profile, organizationId } = req.body;
+
+    if (!email || !password || !role) {
+      throw ApiError.badRequest('Email, contraseña y rol son requeridos');
+    }
+
+    if (!organizationId) {
+      throw ApiError.badRequest('La organización es obligatoria');
+    }
+
+    if (!profile?.nombre || String(profile.nombre).trim() === '') {
+      throw ApiError.badRequest('El nombre es obligatorio');
+    }
+
+    const createdUser = await profileService.createUser(
+      { email, password, role, profile, organizationId },
+      req.user.id
+    );
+
+    return res.status(StatusCodes.CREATED).json(
+      new ApiResponse(
+        StatusCodes.CREATED,
+        { user: createdUser },
+        'Usuario creado exitosamente'
+      )
+    );
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const updateUser = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { email, password, role, profile, organizationId, isActive } = req.body;
+
+    const updatedUser = await profileService.updateUser(
+      id,
+      { email, password, role, profile, organizationId, isActive },
+      req.user.id
+    );
+
+    return res.status(StatusCodes.OK).json(
+      new ApiResponse(
+        StatusCodes.OK,
+        { user: updatedUser },
+        'Usuario actualizado exitosamente'
+      )
+    );
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const deleteUser = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    await profileService.deleteUser(id);
+
+    return res.status(StatusCodes.OK).json(
+      new ApiResponse(
+        StatusCodes.OK,
+        {},
+        'Usuario eliminado exitosamente'
+      )
+    );
+  } catch (error) {
+    next(error);
+  }
+};
+
 // =============================================================================
 // EXPORTACIÓN POR DEFECTO
 // =============================================================================
@@ -746,4 +840,8 @@ export default {
   changePassword,
   getUserStats,
   deactivateAccount,
+  listUsers,
+  createUser,
+  updateUser,
+  deleteUser,
 };

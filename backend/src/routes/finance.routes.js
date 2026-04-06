@@ -11,7 +11,7 @@ import { Router } from 'express';
 import { authenticate } from '../middleware/auth.middleware.js';
 import { requireRole } from '../middleware/role.middleware.js';
 import { validate } from '../middleware/validation.middleware.js';
-import { ROLES } from '../models/User.js';
+import { USER_ROLES as ROLES } from '../models/User.js';
 import financeController from '../controllers/finance.controller.js';
 import {
   registerIncomeSchema,

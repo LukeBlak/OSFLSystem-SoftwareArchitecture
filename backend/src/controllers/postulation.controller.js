@@ -9,7 +9,7 @@ export const createPostulation = async (req, res, next) => {
       req.user.id,
       req.params.proyectoId
     );
-    res.status(201).json(ApiResponse.success('Postulación creada', postulation));
+    res.status(201).json(ApiResponse.created(postulation, 'Postulación creada'));
   } catch (err) {
     next(err);
   }
@@ -18,7 +18,7 @@ export const createPostulation = async (req, res, next) => {
 export const getMyPostulations = async (req, res, next) => {
   try {
     const postulations = await postulationService.getMyPostulations(req.supabase, req.user.id);
-    res.json(ApiResponse.success('Mis postulaciones', postulations));
+    res.json(ApiResponse.ok(postulations, 'Mis postulaciones'));
   } catch (err) {
     next(err);
   }
@@ -27,7 +27,7 @@ export const getMyPostulations = async (req, res, next) => {
 export const getPostulationsByProject = async (req, res, next) => {
   try {
     const postulations = await postulationService.getPostulationsByProject(req.supabase, req.params.proyectoId);
-    res.json(ApiResponse.success('Postulaciones del proyecto', postulations));
+    res.json(ApiResponse.ok(postulations, 'Postulaciones del proyecto'));
   } catch (err) {
     next(err);
   }
@@ -40,7 +40,7 @@ export const updatePostulationStatus = async (req, res, next) => {
       req.params.id,
       req.body
     );
-    res.json(ApiResponse.success('Estado de postulación actualizado', postulation));
+    res.json(ApiResponse.ok(postulation, 'Estado de postulación actualizado'));
   } catch (err) {
     next(err);
   }

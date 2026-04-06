@@ -26,7 +26,43 @@ const getToken = () => localStorage.getItem('token');
 const getUser = () => {
   const raw = localStorage.getItem('user');
   try {
-    return raw ? JSON.parse(raw) : null;
+    const parsed = raw ? JSON.parse(raw) : null;
+    if (!parsed) return null;
+
+    const technicalRoles = new Set(['authenticated', 'anon', 'service_role']);
+    const roleCandidates = [
+      parsed.role,
+      parsed.rol,
+      parsed.user_metadata?.role,
+      parsed.raw_user_meta_data?.role,
+      'miembro',
+    ]
+      .filter(Boolean)
+      .map((value) => String(value).toLowerCase());
+
+    const role = roleCandidates.find((candidate) => !technicalRoles.has(candidate)) || 'miembro';
+
+    const organizationId = (
+      parsed.organizationId
+      || parsed.organizacionId
+      || parsed.organization_id
+      || parsed.organizacion_id
+      || parsed.profile?.organizationId
+      || parsed.profile?.organizacionId
+      || parsed.profile?.organization_id
+      || parsed.profile?.organizacion_id
+      || parsed.user_metadata?.organizationId
+      || parsed.user_metadata?.organization_id
+      || parsed.user_metadata?.organizacionId
+      || parsed.user_metadata?.organizacion_id
+      || null
+    );
+
+    return {
+      ...parsed,
+      role: String(role).toLowerCase(),
+      organizationId,
+    };
   } catch {
     return null;
   }
@@ -44,9 +80,6 @@ const isAuthenticated = () => !!getToken();
  * @returns {{ token, user }} datos de sesión
  */
 const login = async (email, password) => {
-  console.log('🔍 DEBUG - URL completa:', `${API_URL}/login`);
-  console.log('🔍 DEBUG - Valor de API_URL:', API_URL);
-  
   const response = await fetch(`${API_URL}/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -171,8 +204,9 @@ const authHeaders = () => ({
 const getHomeByRole = (role) => {
   switch (role) {
     case 'super_admin':
+      return '/admin';
     case 'admin':
-      return '/estructura/organizaciones';
+      return '/';
     case 'lider_organizacion':
     case 'lider_comite':
       return '/';

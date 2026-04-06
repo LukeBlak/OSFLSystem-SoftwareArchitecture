@@ -26,7 +26,7 @@
  */
 
 import { StatusCodes } from 'http-status-codes';
-import { memberService } from '../services/member.service.js';
+import memberService from '../services/member.service.js';
 import { ApiError } from '../utils/apiError.js';
 import { ApiResponse } from '../utils/apiResponse.js';
 
@@ -1023,6 +1023,58 @@ export const validateMemberHours = async (req, res, next) => {
   }
 };
 
+export const getMemberProjects = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { estado, page = '1', limit = '10' } = req.query;
+
+    const result = await memberService.getMemberProjects(
+      id,
+      { estado: estado || null },
+      {
+        page: parseInt(page, 10),
+        limit: parseInt(limit, 10),
+      }
+    );
+
+    return res.status(StatusCodes.OK).json(
+      new ApiResponse(
+        StatusCodes.OK,
+        {
+          projects: result.projects,
+          pagination: result.pagination,
+        },
+        'Proyectos del miembro obtenidos exitosamente'
+      )
+    );
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getMemberApplications = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { estado } = req.query;
+
+    const applications = await memberService.getMemberApplications(id, {
+      estado: estado || null,
+    });
+
+    return res.status(StatusCodes.OK).json(
+      new ApiResponse(
+        StatusCodes.OK,
+        {
+          applications,
+        },
+        'Postulaciones del miembro obtenidas exitosamente'
+      )
+    );
+  } catch (error) {
+    next(error);
+  }
+};
+
 // =============================================================================
 // EXPORTACIÓN POR DEFECTO
 // =============================================================================
@@ -1054,4 +1106,6 @@ export default {
   getMemberHours,
   registerMemberHours,
   validateMemberHours,
+  getMemberProjects,
+  getMemberApplications,
 };

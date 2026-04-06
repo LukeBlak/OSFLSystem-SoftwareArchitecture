@@ -1,591 +1,313 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import NavbarInner from '../../components/NavbarInner';
-import { 
-  FileText, 
-  Download, 
-  Calendar, 
-  Users, 
-  FolderKanban, 
-  PieChart,
-  BarChart3,
-  FileSpreadsheet,
-  Printer,
-  CheckCircle,
-  AlertCircle,
-  Clock,
-  DollarSign,
-  TrendingUp,
-  Search
-} from 'lucide-react';
+import { FileText, Download, Calendar, PieChart, BarChart3, FileSpreadsheet, Printer, AlertCircle, Clock, DollarSign, TrendingUp, Search, RefreshCcw, ArrowUpRight, ArrowDownRight } from 'lucide-react';
+import { getFinancialSummary, listTransactions } from '../../services/financeService';
+import authService from '../../services/authService';
 
 const ReportesFinancieros = () => {
   const navigate = useNavigate();
+  const currentUser = authService.getUser();
+  const [organizationId, setOrganizationId] = useState(currentUser?.organizationId || currentUser?.organizacionId || '');
+
+  const [loading, setLoading] = useState(true);
+  const [generating, setGenerating] = useState(false);
+  const [error, setError] = useState('');
   const [reportType, setReportType] = useState('general');
-  const [dateRange, setDateRange] = useState({
-    startDate: '',
-    endDate: ''
-  });
+  const [dateRange, setDateRange] = useState({ startDate: '', endDate: '' });
   const [format, setFormat] = useState('pdf');
-  const [selectedMember, setSelectedMember] = useState('');
-  const [selectedProject, setSelectedProject] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [includeDetails, setIncludeDetails] = useState({
-    transactions: true,
-    summary: true,
-    charts: false,
-    signatures: true
-  });
+  const [searchTerm, setSearchTerm] = useState('');
+  const [summary, setSummary] = useState(null);
+  const [transactions, setTransactions] = useState([]);
 
-  const members = [
-    { id: 1, name: 'María González', hours: 48 },
-    { id: 2, name: 'Juan Pérez', hours: 35 },
-    { id: 3, name: 'Ana López', hours: 52 },
-    { id: 4, name: 'Carlos Ruiz', hours: 28 }
-  ];
+  useEffect(() => {
+    const hydrateOrganizationId = async () => {
+      if (organizationId) return;
 
-  const projects = [
-    { id: 1, name: 'Campaña de Reforestación', budget: 5000 },
-    { id: 2, name: 'Alfabetización Digital', budget: 3000 },
-    { id: 3, name: 'Jornada de Salud Preventiva', budget: 4500 }
-  ];
+      const sessionUser = await authService.checkSession();
+      const fallbackOrganizationId = sessionUser?.organizationId || sessionUser?.organizacionId || '';
+      if (fallbackOrganizationId) {
+        setOrganizationId(fallbackOrganizationId);
+      }
+    };
 
-  const handleGenerateReport = async () => {
-    if (!dateRange.startDate || !dateRange.endDate) {
-      alert('Seleccione un rango de fechas');
-      return;
-    }
+    hydrateOrganizationId();
+    loadReportData();
+  }, [organizationId]);
 
-    if (reportType === 'member' && !selectedMember) {
-      alert('Seleccione un miembro');
-      return;
-    }
-
-    if (reportType === 'project' && !selectedProject) {
-      alert('Seleccione un proyecto');
-      return;
-    }
-
+  const loadReportData = async () => {
     setLoading(true);
+    setError('');
+
     try {
-      // Simulación de generación de reporte
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      alert(`Reporte ${reportType} generado en formato ${format.toUpperCase()}`);
-      // Aquí iría la descarga del archivo
-    } catch (error) {
-      alert('Error al generar el reporte');
+      const [summaryResponse, transactionsResponse] = await Promise.all([
+        organizationId ? getFinancialSummary({ organizacionId: organizationId }) : Promise.resolve(null),
+        organizationId ? listTransactions({ organizacionId: organizationId, limit: 200 }) : Promise.resolve(null),
+      ]);
+
+      setSummary(summaryResponse?.data?.summary || summaryResponse?.summary || summaryResponse?.data || null);
+
+      const transactionItems = Array.isArray(transactionsResponse?.data?.transacciones)
+        ? transactionsResponse.data.transacciones
+        : Array.isArray(transactionsResponse?.data)
+          ? transactionsResponse.data
+          : [];
+
+      setTransactions(transactionItems.map((transaction) => ({
+        ...transaction,
+        type: transaction.tipo || transaction.type,
+        description: transaction.concepto || transaction.description,
+        amount: Number(transaction.monto || transaction.amount || 0),
+        date: transaction.fecha || transaction.date,
+        category: transaction.categoria || transaction.category || 'Sin categoría',
+      })));
+    } catch (apiError) {
+      setError(apiError.userMessage || apiError.message || 'No fue posible cargar el resumen financiero');
     } finally {
       setLoading(false);
     }
   };
 
+  const formatCurrency = (amount) => new Intl.NumberFormat('es-ES', {
+    style: 'currency',
+    currency: 'USD',
+  }).format(Number(amount || 0));
+
   const formatDate = (dateString) => {
-    if (!dateString) return '';
+    if (!dateString) return 'Sin fecha';
     return new Date(dateString).toLocaleDateString('es-ES', {
       year: 'numeric',
-      month: 'long',
-      day: 'numeric'
+      month: 'short',
+      day: 'numeric',
     });
   };
 
-  const getReportIcon = () => {
-    switch(reportType) {
-      case 'general': return <PieChart size={24} />;
-      case 'member': return <Users size={24} />;
-      case 'project': return <FolderKanban size={24} />;
-      default: return <FileText size={24} />;
+  const filteredTransactions = useMemo(() => transactions.filter((transaction) => {
+    const search = searchTerm.trim().toLowerCase();
+    if (!search) return true;
+    return (transaction.description || '').toLowerCase().includes(search)
+      || (transaction.category || '').toLowerCase().includes(search);
+  }), [transactions, searchTerm]);
+
+  const summaryCards = useMemo(() => {
+    const ingresos = summary?.ingresos ?? summary?.totalIngresos ?? summary?.income ?? 0;
+    const egresos = summary?.egresos ?? summary?.totalEgresos ?? summary?.expenses ?? 0;
+    const balance = summary?.balance ?? summary?.saldo ?? summary?.saldoActual ?? (ingresos - egresos);
+    return [
+      { title: 'Ingresos', value: formatCurrency(ingresos), icon: TrendingUp, color: 'bg-green-100 text-green-600' },
+      { title: 'Egresos', value: formatCurrency(egresos), icon: ArrowDownRight, color: 'bg-red-100 text-red-600' },
+      { title: 'Saldo', value: formatCurrency(balance), icon: DollarSign, color: 'bg-teal-100 text-teal-600' },
+      { title: 'Movimientos', value: String(summary?.movimientos ?? summary?.transactions ?? transactions.length), icon: BarChart3, color: 'bg-sky-100 text-sky-600' },
+    ];
+  }, [summary, transactions]);
+
+  const handleGenerateReport = async () => {
+    if (!dateRange.startDate || !dateRange.endDate) {
+      setError('Seleccione un rango de fechas para generar el reporte');
+      return;
+    }
+
+    setGenerating(true);
+    setError('');
+
+    try {
+      const payload = {
+        organizationId,
+        reportType,
+        dateRange,
+        format,
+        generatedAt: new Date().toISOString(),
+        summary,
+        transactions: filteredTransactions,
+      };
+
+      if (format === 'json') {
+        const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `reporte-financiero-${reportType}-${new Date().toISOString().slice(0, 10)}.json`;
+        link.click();
+        URL.revokeObjectURL(url);
+      } else {
+        const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `reporte-financiero-${reportType}-${new Date().toISOString().slice(0, 10)}.${format}`;
+        link.click();
+        URL.revokeObjectURL(url);
+      }
+    } catch (apiError) {
+      setError(apiError.userMessage || apiError.message || 'Error al generar el reporte');
+    } finally {
+      setGenerating(false);
     }
   };
 
-  const getReportTitle = () => {
-    switch(reportType) {
-      case 'general': return 'Reporte Financiero General';
-      case 'member': return 'Reporte de Horas por Miembro';
-      case 'project': return 'Reporte Financiero por Proyecto';
-      default: return 'Reporte';
-    }
-  };
+  const reportTitle = reportType === 'general'
+    ? 'Reporte Financiero General'
+    : reportType === 'member'
+      ? 'Reporte Financiero por Miembro'
+      : 'Reporte Financiero por Proyecto';
 
-  const getReportDescription = () => {
-    switch(reportType) {
-      case 'general': 
-        return 'Todos los ingresos y egresos de la organización con balance general';
-      case 'member': 
-        return 'Detalle de horas sociales y participación de un voluntario específico';
-      case 'project': 
-        return 'Balance financiero detallado de un proyecto específico';
-      default: 
-        return '';
-    }
-  };
+  const reportDescription = reportType === 'general'
+    ? 'Resumen consolidado de ingresos, egresos y saldo actual.'
+    : reportType === 'member'
+      ? 'Vista de apoyo para reportar la participación de un voluntario.'
+      : 'Resumen de movimientos asociados a un proyecto específico.';
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#f8faf9] flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-[#0d9488] mx-auto mb-4" />
+          <p className="font-inter text-[#64748b]">Cargando reporte financiero...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#f8faf9]">
-      <NavbarInner 
-        title="Generar Reportes"
-        subtitle="Crea reportes financieros y de horas sociales con validez institucional"
-      />
+      <NavbarInner title="Generar Reportes" subtitle="Crea reportes financieros con los datos reales de caja" />
 
       <main className="container mx-auto px-6 pt-28 pb-12 max-w-6xl">
-        {/* Header de la página */}
-        <div className="mb-8">
-          <h2 className="font-poppins font-bold text-3xl text-[#1f2937] mb-2">
-            Centro de Reportes
-          </h2>
-          <p className="font-inter text-[#64748b]">
-            Genera reportes oficiales en PDF o Excel para presentación institucional
-          </p>
+        <div className="mb-8 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+          <div>
+            <h2 className="font-poppins font-bold text-3xl text-[#1f2937] mb-2">Centro de Reportes</h2>
+            <p className="font-inter text-[#64748b]">Resumen y exportación de movimientos financieros de la organización</p>
+          </div>
+          <div className="flex gap-3">
+            <button onClick={loadReportData} className="flex items-center gap-2 px-4 py-2 bg-white border border-[#e2e8f0] rounded-lg font-inter font-semibold text-[#64748b] hover:bg-[#f8faf9] transition-colors"><RefreshCcw size={18} />Actualizar</button>
+            <button onClick={handleGenerateReport} className="flex items-center gap-2 px-4 py-2 bg-[#0d9488] text-white rounded-lg font-inter font-semibold hover:bg-[#0f766e] transition-colors" disabled={generating}><Download size={18} />{generating ? 'Generando...' : 'Descargar'}</button>
+          </div>
+        </div>
+
+        {error && <div className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-red-700 font-inter">{error}</div>}
+
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+          {summaryCards.map((card) => {
+            const IconComponent = card.icon;
+            return (
+              <div key={card.title} className="card p-5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-inter text-sm text-[#64748b]">{card.title}</p>
+                    <p className="font-poppins font-bold text-2xl text-[#1f2937] mt-1">{card.value}</p>
+                  </div>
+                  <div className={`w-12 h-12 rounded-full flex items-center justify-center ${card.color}`}><IconComponent size={22} /></div>
+                </div>
+              </div>
+            );
+          })}
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Configuración del Reporte */}
           <div className="lg:col-span-2 space-y-6">
-            {/* Tipo de Reporte */}
             <div className="card p-6">
-              <div className="flex items-center gap-2 mb-6">
-                <FileText size={20} className="text-[#0d9488]" />
-                <h3 className="font-poppins font-bold text-xl text-[#1f2937]">
-                  1. Tipo de Reporte
-                </h3>
+              <div className="flex items-center gap-2 mb-4"><FileText size={20} className="text-[#0d9488]" /><h3 className="font-poppins font-bold text-xl text-[#1f2937]">Configuración del Reporte</h3></div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <label className="block">
+                  <span className="block font-poppins font-semibold text-[#1f2937] mb-2">Fecha inicial</span>
+                  <input type="date" value={dateRange.startDate} onChange={(e) => setDateRange((current) => ({ ...current, startDate: e.target.value }))} className="input-field" />
+                </label>
+                <label className="block">
+                  <span className="block font-poppins font-semibold text-[#1f2937] mb-2">Fecha final</span>
+                  <input type="date" value={dateRange.endDate} onChange={(e) => setDateRange((current) => ({ ...current, endDate: e.target.value }))} className="input-field" />
+                </label>
               </div>
 
-              <div className="space-y-4">
-                <label className={`flex items-center p-4 border-2 rounded-lg cursor-pointer transition-all duration-200
-                  ${reportType === 'general' 
-                    ? 'border-[#0d9488] bg-[#ccfbf1]' 
-                    : 'border-[#e2e8f0] hover:border-[#0d9488]'
-                  }`}>
-                  <input
-                    type="radio"
-                    name="reportType"
-                    value="general"
-                    checked={reportType === 'general'}
-                    onChange={(e) => setReportType(e.target.value)}
-                    className="w-5 h-5 text-[#0d9488] focus:ring-[#0d9488]"
-                  />
-                  <div className="ml-4 flex-1">
-                    <div className="flex items-center gap-2">
-                      <PieChart size={20} className="text-[#0d9488]" />
-                      <p className="font-poppins font-semibold text-[#1f2937]">Reporte General</p>
-                    </div>
-                    <p className="font-inter text-sm text-[#64748b] ml-6">
-                      Todos los ingresos y egresos de la organización
-                    </p>
-                  </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                <label className="block">
+                  <span className="block font-poppins font-semibold text-[#1f2937] mb-2">Tipo</span>
+                  <select value={reportType} onChange={(e) => setReportType(e.target.value)} className="input-field">
+                    <option value="general">General</option>
+                    <option value="member">Por Miembro</option>
+                    <option value="project">Por Proyecto</option>
+                  </select>
                 </label>
+                <label className="block">
+                  <span className="block font-poppins font-semibold text-[#1f2937] mb-2">Formato</span>
+                  <select value={format} onChange={(e) => setFormat(e.target.value)} className="input-field">
+                    <option value="pdf">PDF</option>
+                    <option value="xlsx">Excel</option>
+                    <option value="json">JSON</option>
+                  </select>
+                </label>
+                <div className="block">
+                  <span className="block font-poppins font-semibold text-[#1f2937] mb-2">Organización</span>
+                  <div className="input-field bg-[#f8faf9] flex items-center gap-2 text-[#64748b]"><Clock size={16} />{organizationId || 'No disponible'}</div>
+                </div>
+              </div>
 
-                <label className={`flex items-center p-4 border-2 rounded-lg cursor-pointer transition-all duration-200
-                  ${reportType === 'member' 
-                    ? 'border-[#0d9488] bg-[#ccfbf1]' 
-                    : 'border-[#e2e8f0] hover:border-[#0d9488]'
-                  }`}>
-                  <input
-                    type="radio"
-                    name="reportType"
-                    value="member"
-                    checked={reportType === 'member'}
-                    onChange={(e) => setReportType(e.target.value)}
-                    className="w-5 h-5 text-[#0d9488] focus:ring-[#0d9488]"
-                  />
-                  <div className="ml-4 flex-1">
-                    <div className="flex items-center gap-2">
-                      <Users size={20} className="text-[#0d9488]" />
-                      <p className="font-poppins font-semibold text-[#1f2937]">Reporte por Miembro</p>
-                    </div>
-                    <p className="font-inter text-sm text-[#64748b] ml-6">
-                      Horas sociales y participación de un voluntario específico
-                    </p>
-                  </div>
-                </label>
-
-                <label className={`flex items-center p-4 border-2 rounded-lg cursor-pointer transition-all duration-200
-                  ${reportType === 'project' 
-                    ? 'border-[#0d9488] bg-[#ccfbf1]' 
-                    : 'border-[#e2e8f0] hover:border-[#0d9488]'
-                  }`}>
-                  <input
-                    type="radio"
-                    name="reportType"
-                    value="project"
-                    checked={reportType === 'project'}
-                    onChange={(e) => setReportType(e.target.value)}
-                    className="w-5 h-5 text-[#0d9488] focus:ring-[#0d9488]"
-                  />
-                  <div className="ml-4 flex-1">
-                    <div className="flex items-center gap-2">
-                      <FolderKanban size={20} className="text-[#0d9488]" />
-                      <p className="font-poppins font-semibold text-[#1f2937]">Reporte por Proyecto</p>
-                    </div>
-                    <p className="font-inter text-sm text-[#64748b] ml-6">
-                      Balance financiero de un proyecto específico
-                    </p>
-                  </div>
-                </label>
+              <div className="border-t border-[#e2e8f0] pt-4">
+                <div className="flex items-center gap-2 mb-2"><Calendar size={16} className="text-[#0d9488]" /><span className="font-poppins font-semibold text-[#1f2937]">Vista previa</span></div>
+                <h4 className="font-poppins font-bold text-lg text-[#1f2937]">{reportTitle}</h4>
+                <p className="font-inter text-[#64748b] mt-1">{reportDescription}</p>
               </div>
             </div>
 
-            {/* Filtros Adicionales */}
-            {(reportType === 'member' || reportType === 'project') && (
-              <div className="card p-6">
-                <div className="flex items-center gap-2 mb-6">
-                  <Search size={20} className="text-[#0d9488]" />
-                  <h3 className="font-poppins font-bold text-xl text-[#1f2937]">
-                    2. Filtros Adicionales
-                  </h3>
-                </div>
-
-                {reportType === 'member' && (
-                  <div>
-                    <label className="block font-poppins font-semibold text-[#1f2937] mb-2">
-                      Seleccionar Miembro <span className="text-red-500">*</span>
-                    </label>
-                    <select
-                      value={selectedMember}
-                      onChange={(e) => setSelectedMember(e.target.value)}
-                      className="input-field"
-                    >
-                      <option value="">Seleccione un miembro</option>
-                      {members.map(member => (
-                        <option key={member.id} value={member.id}>
-                          {member.name} ({member.hours} hrs)
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-
-                {reportType === 'project' && (
-                  <div>
-                    <label className="block font-poppins font-semibold text-[#1f2937] mb-2">
-                      Seleccionar Proyecto <span className="text-red-500">*</span>
-                    </label>
-                    <select
-                      value={selectedProject}
-                      onChange={(e) => setSelectedProject(e.target.value)}
-                      className="input-field"
-                    >
-                      <option value="">Seleccione un proyecto</option>
-                      {projects.map(project => (
-                        <option key={project.id} value={project.id}>
-                          {project.name} ({formatCurrency(project.budget)})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Rango de Fechas */}
             <div className="card p-6">
-              <div className="flex items-center gap-2 mb-6">
-                <Calendar size={20} className="text-[#0d9488]" />
-                <h3 className="font-poppins font-bold text-xl text-[#1f2937]">
-                  {reportType === 'general' ? '2' : '3'}. Rango de Fechas <span className="text-red-500">*</span>
-                </h3>
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2"><PieChart size={20} className="text-[#0d9488]" /><h3 className="font-poppins font-bold text-xl text-[#1f2937]">Movimientos recientes</h3></div>
+                <span className="font-inter text-sm text-[#64748b]">{filteredTransactions.length} registros</span>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label className="block font-inter text-sm text-[#64748b] mb-2">
-                    Fecha Inicial
-                  </label>
-                  <input
-                    type="date"
-                    value={dateRange.startDate}
-                    onChange={(e) => setDateRange(prev => ({ 
-                      ...prev, 
-                      startDate: e.target.value 
-                    }))}
-                    className="input-field"
-                  />
-                  {dateRange.startDate && (
-                    <p className="font-inter text-xs text-[#64748b] mt-1">
-                      {formatDate(dateRange.startDate)}
-                    </p>
-                  )}
-                </div>
-                <div>
-                  <label className="block font-inter text-sm text-[#64748b] mb-2">
-                    Fecha Final
-                  </label>
-                  <input
-                    type="date"
-                    value={dateRange.endDate}
-                    onChange={(e) => setDateRange(prev => ({ 
-                      ...prev, 
-                      endDate: e.target.value 
-                    }))}
-                    className="input-field"
-                  />
-                  {dateRange.endDate && (
-                    <p className="font-inter text-xs text-[#64748b] mt-1">
-                      {formatDate(dateRange.endDate)}
-                    </p>
-                  )}
-                </div>
+              <div className="relative w-full md:w-72 mb-4">
+                <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#64748b]" />
+                <input type="text" placeholder="Buscar movimiento..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="input-field pl-10" />
               </div>
 
-              {dateRange.startDate && dateRange.endDate && (
-                <div className="mt-4 p-4 bg-[#E0F2FE] border border-[#7dd3fc] rounded-lg">
-                  <div className="flex items-center gap-2 text-[#64748b] text-sm">
-                    <Clock size={16} />
-                    <span className="font-inter">
-                      Período: <strong className="text-[#0d9488]">{getDaysBetween(dateRange.startDate, dateRange.endDate)} días</strong>
-                    </span>
+              <div className="divide-y divide-[#e2e8f0]">
+                {filteredTransactions.map((transaction) => (
+                  <div key={transaction.id} className="py-4 flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-4">
+                      <div className={`w-11 h-11 rounded-full flex items-center justify-center ${transaction.type === 'ingreso' ? 'bg-green-100' : 'bg-red-100'}`}>
+                        {transaction.type === 'ingreso' ? <ArrowUpRight size={20} className="text-green-600" /> : <ArrowDownRight size={20} className="text-red-600" />}
+                      </div>
+                      <div>
+                        <p className="font-poppins font-semibold text-[#1f2937]">{transaction.description}</p>
+                        <p className="font-inter text-sm text-[#64748b]">{transaction.category} · {formatDate(transaction.date)}</p>
+                      </div>
+                    </div>
+                    <div className={`font-poppins font-bold ${transaction.type === 'ingreso' ? 'text-green-600' : 'text-red-600'}`}>
+                      {transaction.type === 'ingreso' ? '+' : '-'}{formatCurrency(transaction.amount)}
+                    </div>
                   </div>
-                </div>
+                ))}
+              </div>
+
+              {filteredTransactions.length === 0 && (
+                <div className="py-10 text-center text-[#64748b] font-inter">No hay transacciones que coincidan con el filtro actual.</div>
               )}
-            </div>
-
-            {/* Formato de Salida */}
-            <div className="card p-6">
-              <div className="flex items-center gap-2 mb-6">
-                <Download size={20} className="text-[#0d9488]" />
-                <h3 className="font-poppins font-bold text-xl text-[#1f2937]">
-                  {reportType === 'general' ? '3' : '4'}. Formato de Salida
-                </h3>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <label className={`flex items-center justify-center p-6 border-2 rounded-lg cursor-pointer transition-all
-                  ${format === 'pdf' 
-                    ? 'border-[#0d9488] bg-[#ccfbf1]' 
-                    : 'border-[#e2e8f0] hover:border-[#0d9488]'
-                  }`}>
-                  <input
-                    type="radio"
-                    name="format"
-                    value="pdf"
-                    checked={format === 'pdf'}
-                    onChange={(e) => setFormat(e.target.value)}
-                    className="w-5 h-5 text-[#0d9488] focus:ring-[#0d9488] mr-3"
-                  />
-                  <div className="text-center">
-                    <FileText size={32} className="mx-auto mb-2 text-red-600" />
-                    <span className="font-poppins font-semibold text-[#1f2937]">PDF</span>
-                    <p className="font-inter text-xs text-[#64748b] mt-1">
-                      Documento imprimible
-                    </p>
-                  </div>
-                </label>
-
-                <label className={`flex items-center justify-center p-6 border-2 rounded-lg cursor-pointer transition-all
-                  ${format === 'excel' 
-                    ? 'border-[#0d9488] bg-[#ccfbf1]' 
-                    : 'border-[#e2e8f0] hover:border-[#0d9488]'
-                  }`}>
-                  <input
-                    type="radio"
-                    name="format"
-                    value="excel"
-                    checked={format === 'excel'}
-                    onChange={(e) => setFormat(e.target.value)}
-                    className="w-5 h-5 text-[#0d9488] focus:ring-[#0d9488] mr-3"
-                  />
-                  <div className="text-center">
-                    <FileSpreadsheet size={32} className="mx-auto mb-2 text-green-600" />
-                    <span className="font-poppins font-semibold text-[#1f2937]">Excel</span>
-                    <p className="font-inter text-xs text-[#64748b] mt-1">
-                      Hoja de cálculo editable
-                    </p>
-                  </div>
-                </label>
-              </div>
-            </div>
-
-            {/* Contenido del Reporte */}
-            <div className="card p-6">
-              <div className="flex items-center gap-2 mb-6">
-                <BarChart3 size={20} className="text-[#0d9488]" />
-                <h3 className="font-poppins font-bold text-xl text-[#1f2937]">
-                  {reportType === 'general' ? '4' : '5'}. Contenido del Reporte
-                </h3>
-              </div>
-
-              <div className="space-y-3">
-                <label className="flex items-center p-3 border border-[#e2e8f0] rounded-lg cursor-pointer hover:bg-[#f8faf9]">
-                  <input
-                    type="checkbox"
-                    checked={includeDetails.transactions}
-                    onChange={(e) => setIncludeDetails(prev => ({ ...prev, transactions: e.target.checked }))}
-                    className="w-5 h-5 text-[#0d9488] focus:ring-[#0d9488] rounded"
-                  />
-                  <div className="ml-3 flex items-center gap-2 flex-1">
-                    <DollarSign size={18} className="text-[#64748b]" />
-                    <span className="font-inter text-[#1f2937]">Detalle de transacciones</span>
-                  </div>
-                  <CheckCircle size={18} className="text-green-600" />
-                </label>
-
-                <label className="flex items-center p-3 border border-[#e2e8f0] rounded-lg cursor-pointer hover:bg-[#f8faf9]">
-                  <input
-                    type="checkbox"
-                    checked={includeDetails.summary}
-                    onChange={(e) => setIncludeDetails(prev => ({ ...prev, summary: e.target.checked }))}
-                    className="w-5 h-5 text-[#0d9488] focus:ring-[#0d9488] rounded"
-                  />
-                  <div className="ml-3 flex items-center gap-2 flex-1">
-                    <TrendingUp size={18} className="text-[#64748b]" />
-                    <span className="font-inter text-[#1f2937]">Resumen financiero</span>
-                  </div>
-                  <CheckCircle size={18} className="text-green-600" />
-                </label>
-
-                <label className="flex items-center p-3 border border-[#e2e8f0] rounded-lg cursor-pointer hover:bg-[#f8faf9]">
-                  <input
-                    type="checkbox"
-                    checked={includeDetails.charts}
-                    onChange={(e) => setIncludeDetails(prev => ({ ...prev, charts: e.target.checked }))}
-                    className="w-5 h-5 text-[#0d9488] focus:ring-[#0d9488] rounded"
-                  />
-                  <div className="ml-3 flex items-center gap-2 flex-1">
-                    <PieChart size={18} className="text-[#64748b]" />
-                    <span className="font-inter text-[#1f2937]">Gráficos y visualizaciones</span>
-                  </div>
-                  {includeDetails.charts && <CheckCircle size={18} className="text-green-600" />}
-                </label>
-
-                <label className="flex items-center p-3 border border-[#e2e8f0] rounded-lg cursor-pointer hover:bg-[#f8faf9]">
-                  <input
-                    type="checkbox"
-                    checked={includeDetails.signatures}
-                    onChange={(e) => setIncludeDetails(prev => ({ ...prev, signatures: e.target.checked }))}
-                    className="w-5 h-5 text-[#0d9488] focus:ring-[#0d9488] rounded"
-                  />
-                  <div className="ml-3 flex items-center gap-2 flex-1">
-                    <FileText size={18} className="text-[#64748b]" />
-                    <span className="font-inter text-[#1f2937]">Firmas y validación institucional</span>
-                  </div>
-                  <CheckCircle size={18} className="text-green-600" />
-                </label>
-              </div>
             </div>
           </div>
 
-          {/* Panel Lateral - Vista Previa */}
           <div className="space-y-6">
-            {/* Resumen de Configuración */}
-            <div className="card p-6 bg-gradient-to-br from-[#0d9488] to-[#0f766e] text-white">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-12 h-12 rounded-lg bg-white/20 flex items-center justify-center">
-                  {getReportIcon()}
-                </div>
-                <div>
-                  <h3 className="font-poppins font-bold text-lg">
-                    {getReportTitle()}
-                  </h3>
-                  <p className="font-inter text-sm text-teal-100">
-                    {reportType === 'general' ? '3' : '5'} configuraciones
-                  </p>
-                </div>
-              </div>
-              <p className="font-inter text-sm text-teal-100 mb-4">
-                {getReportDescription()}
-              </p>
-              <div className="space-y-2 text-sm">
-                <div className="flex items-center gap-2">
-                  <Calendar size={14} className="text-teal-200" />
-                  <span>
-                    {dateRange.startDate && dateRange.endDate 
-                      ? `${formatDate(dateRange.startDate)} - ${formatDate(dateRange.endDate)}`
-                      : 'Seleccione fechas'
-                    }
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <FileText size={14} className="text-teal-200" />
-                  <span>Formato: {format.toUpperCase()}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <CheckCircle size={14} className="text-teal-200" />
-                  <span>
-                    {Object.values(includeDetails).filter(v => v).length} secciones incluidas
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Vista Previa del Contenido */}
             <div className="card p-6">
-              <div className="flex items-center gap-2 mb-4">
-                <Printer size={20} className="text-[#0d9488]" />
-                <h3 className="font-poppins font-bold text-xl text-[#1f2937]">
-                  Vista Previa
-                </h3>
-              </div>
-              
-              <div className="border-2 border-dashed border-[#e2e8f0] rounded-lg p-6 text-center bg-[#f8faf9]">
-                <div className="w-16 h-16 rounded-full bg-[#E0F2FE] flex items-center justify-center mx-auto mb-4">
-                  <FileText size={32} className="text-[#0d9488]" />
-                </div>
-                <p className="font-inter text-sm text-[#64748b] mb-4">
-                  El reporte incluirá:
-                </p>
-                <ul className="text-left inline-block space-y-2 text-sm text-[#64748b] font-inter">
-                  <li className="flex items-center gap-2">
-                    <CheckCircle size={14} className="text-green-600" />
-                    Encabezado institucional
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <CheckCircle size={14} className="text-green-600" />
-                    Fecha de generación
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <CheckCircle size={14} className="text-green-600" />
-                    Rango de fechas seleccionado
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <CheckCircle size={14} className="text-green-600" />
-                    Detalle completo de transacciones
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <CheckCircle size={14} className="text-green-600" />
-                    Totales y resumen financiero
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <CheckCircle size={14} className="text-green-600" />
-                    Firma digital autorizada
-                  </li>
-                </ul>
-              </div>
+              <div className="flex items-center gap-2 mb-4"><FileSpreadsheet size={20} className="text-[#0d9488]" /><h3 className="font-poppins font-bold text-xl text-[#1f2937]">Exportar</h3></div>
+              <p className="font-inter text-sm text-[#64748b] mb-4">Genera una copia del resumen financiero para archivo o presentación.</p>
+              <button onClick={handleGenerateReport} className="w-full btn-primary py-3 flex items-center justify-center gap-2" disabled={generating}><Download size={18} />{generating ? 'Generando...' : 'Descargar reporte'}</button>
             </div>
 
-            {/* Botón de Generar */}
-            <button
-              onClick={handleGenerateReport}
-              disabled={loading || !dateRange.startDate || !dateRange.endDate}
-              className="w-full bg-[#0d9488] text-white py-4 rounded-lg 
-                       font-poppins font-semibold hover:bg-[#0f766e] transition-colors 
-                       disabled:opacity-50 disabled:cursor-not-allowed
-                       flex items-center justify-center gap-3 shadow-lg"
-            >
-              {loading ? (
-                <>
-                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
-                  Generando Reporte...
-                </>
-              ) : (
-                <>
-                  <Download size={20} />
-                  Generar Reporte
-                </>
-              )}
-            </button>
+            <div className="card p-6">
+              <div className="flex items-center gap-2 mb-4"><AlertCircle size={20} className="text-[#0d9488]" /><h3 className="font-poppins font-bold text-xl text-[#1f2937]">Notas</h3></div>
+              <ul className="space-y-3 text-sm font-inter text-[#64748b]">
+                <li>El reporte se arma con el resumen financiero real del backend.</li>
+                <li>El archivo descargado usa el rango de fechas seleccionado como contexto.</li>
+                <li>Si no se puede resolver la organización, el módulo muestra el identificador disponible en sesión.</li>
+              </ul>
+            </div>
 
-            {/* Información Adicional */}
-            <div className="card p-4 bg-yellow-50 border border-yellow-300">
-              <div className="flex items-start gap-3">
-                <AlertCircle size={20} className="text-yellow-600 flex-shrink-0 mt-0.5" />
-                <div>
-                  <p className="font-poppins font-semibold text-[#1f2937] text-sm mb-1">
-                    Nota Importante
-                  </p>
-                  <p className="font-inter text-xs text-[#64748b]">
-                    Los reportes generados tienen validez institucional y pueden ser utilizados para trámites oficiales.
-                  </p>
-                </div>
+            <div className="card p-6 bg-gradient-to-br from-[#0d9488] to-[#0f766e] text-white">
+              <div className="flex items-center gap-2 mb-3"><TrendingUp size={20} /><h3 className="font-poppins font-bold text-xl">Acceso rápido</h3></div>
+              <p className="font-inter text-sm text-teal-100 mb-4">Ir a caja o registrar un nuevo movimiento desde aquí.</p>
+              <div className="space-y-2">
+                <button onClick={() => navigate('/finanzas/caja')} className="w-full rounded-lg bg-white/15 px-4 py-2 text-left hover:bg-white/25 transition-colors">Consultar caja</button>
+                <button onClick={() => navigate('/finanzas/ingreso/nuevo')} className="w-full rounded-lg bg-white/15 px-4 py-2 text-left hover:bg-white/25 transition-colors">Registrar ingreso</button>
+                <button onClick={() => navigate('/finanzas/egreso/nuevo')} className="w-full rounded-lg bg-white/15 px-4 py-2 text-left hover:bg-white/25 transition-colors">Registrar egreso</button>
               </div>
             </div>
           </div>
@@ -593,23 +315,6 @@ const ReportesFinancieros = () => {
       </main>
     </div>
   );
-};
-
-// Función auxiliar para calcular días entre fechas
-const getDaysBetween = (startDate, endDate) => {
-  const start = new Date(startDate);
-  const end = new Date(endDate);
-  const diffTime = Math.abs(end - start);
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-  return diffDays;
-};
-
-// Función auxiliar para formatear moneda
-const formatCurrency = (amount) => {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD'
-  }).format(amount);
 };
 
 export default ReportesFinancieros;

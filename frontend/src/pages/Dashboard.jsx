@@ -1,6 +1,8 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
+import authService from '../services/authService';
+import { canAccessRoute } from '../config/accessControl';
 import { 
   FolderKanban, 
   Clock, 
@@ -9,55 +11,101 @@ import {
   Users, 
   CheckCircle2, 
   PiggyBank,
-  ArrowRight
+  ArrowRight,
+  Settings
 } from 'lucide-react';
 
 const Dashboard = () => {
   const navigate = useNavigate();
+  const role = String(authService.getUser()?.role || '').toLowerCase();
+
+  const canSeeModule = (allowedRoles = []) => {
+    if (allowedRoles.length === 0) return true;
+    return allowedRoles.includes(role);
+  };
 
   const modules = [
-    {
+    ...(canSeeModule(['super_admin']) ? [
+      {
+        title: 'Administración',
+        description: 'Gestión de organizaciones y configuración',
+        icon: Settings,
+        iconBg: 'bg-[#f59e0b]',
+        stats: 'Configuración del sistema',
+        statsColor: 'text-[#f59e0b]',
+        link: '/admin',
+        allowedRoles: ['super_admin'],
+        items: [
+          { name: 'Dashboard Admin', path: '/admin' },
+          { name: 'Gestionar Organizaciones', path: '/admin/organizaciones' },
+          { name: 'Gestionar Usuarios', path: '/admin/usuarios' },
+          { name: 'Nueva Organización', path: '/admin/organizaciones/nueva' }
+        ]
+      }
+    ] : []),
+    ...(canSeeModule(['admin', 'lider_organizacion', 'lider_comite', 'miembro']) ? [{
       title: 'Operaciones',
       description: 'Gestión de proyectos y comités',
       icon: FolderKanban,
       iconBg: 'bg-[#6d28d9]',
-      stats: '12 proyectos',
+      stats: 'Proyectos activos',
       statsColor: 'text-[#0d9488]',
-      link: '/operaciones',
+      link: '/proyectos/planificar',
+      allowedRoles: ['admin', 'lider_organizacion', 'lider_comite', 'miembro'],
       items: [
-        { name: 'Planificar Proyecto', path: '/operaciones/planificar' },
-        { name: 'Vincular Comité', path: '/operaciones/vincular' },
-        { name: 'Aprobar Participantes', path: '/operaciones/aprobar' }
+        { name: 'Planificar Proyecto', path: '/proyectos/planificar' },
+        { name: 'Vincular Comité', path: '/proyectos/vincular' },
+        { name: 'Inscribirse a Proyecto', path: '/proyectos/inscribirse' },
+        { name: 'Aprobar Participantes', path: '/proyectos/aprobar' }
       ]
-    },
-    {
+    }] : []),
+    ...(canSeeModule(['admin', 'lider_organizacion', 'lider_comite', 'miembro']) ? [{
       title: 'Horas Sociales',
       description: 'Registro y validación de horas',
       icon: Clock,
       iconBg: 'bg-[#0d9488]',
-      stats: '48 hrs validadas',
+      stats: 'Horas validadas',
       statsColor: 'text-[#0d9488]',
-      link: '/horas',
+      link: '/horas/asistencia',
+      allowedRoles: ['admin', 'lider_organizacion', 'lider_comite', 'miembro'],
       items: [
         { name: 'Registro Asistencia', path: '/horas/asistencia' },
         { name: 'Validar Horas', path: '/horas/validar' },
-        { name: 'Historial', path: '/horas/historial' }
+        { name: 'Historial Personal', path: '/horas/historial' }
       ]
-    },
-    {
+    }] : []),
+    ...(canSeeModule(['admin', 'lider_organizacion']) ? [{
       title: 'Finanzas',
       description: 'Control de ingresos y egresos',
       icon: Wallet,
       iconBg: 'bg-[#7dd3fc]',
-      stats: '$12,450 saldo',
+      stats: 'Caja y reportes',
       statsColor: 'text-[#0d9488]',
-      link: '/finanzas',
+      link: '/finanzas/caja',
+      allowedRoles: ['admin', 'lider_organizacion'],
       items: [
-        { name: 'Consultar Caja', path: '/finanzas/caja' },
+        { name: 'Ingresos', path: '/finanzas/ingreso/nuevo' },
+        { name: 'Egresos', path: '/finanzas/egreso/nuevo' },
+        { name: 'Consulta Caja', path: '/finanzas/caja' },
         { name: 'Reportes', path: '/finanzas/reportes' }
       ]
-    }
+    }] : [])
   ];
+
+  const visibleModules = modules
+    .map((module) => {
+      const allowedItems = module.items.filter((item) => canAccessRoute(role, item.path));
+      if (allowedItems.length === 0) {
+        return null;
+      }
+
+      return {
+        ...module,
+        items: allowedItems,
+        link: allowedItems[0].path,
+      };
+    })
+    .filter(Boolean);
 
   const statsCards = [
     {
@@ -94,7 +142,7 @@ const Dashboard = () => {
       <main className="container mx-auto px-6 pt-28 pb-12">
         {/* Modules Grid */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          {modules.map((module, index) => {
+          {visibleModules.map((module, index) => {
             const IconComponent = module.icon;
             return (
               <div

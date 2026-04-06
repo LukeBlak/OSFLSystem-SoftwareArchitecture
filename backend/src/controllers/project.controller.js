@@ -5,7 +5,7 @@ import { ApiError } from '../utils/apiError.js';
 export const createProject = async (req, res, next) => {
   try {
     const project = await projectService.createProject(req.supabase, req.body, req.user.organizationId);
-    res.status(201).json(ApiResponse.success('Proyecto creado', project));
+    res.status(201).json(ApiResponse.created(project, 'Proyecto creado'));
   } catch (err) {
     next(err);
   }
@@ -14,7 +14,7 @@ export const createProject = async (req, res, next) => {
 export const getProjects = async (req, res, next) => {
   try {
     const projects = await projectService.getProjects(req.supabase, req.query);
-    res.json(ApiResponse.success('Proyectos obtenidos', projects));
+    res.json(ApiResponse.ok(projects, 'Proyectos obtenidos'));
   } catch (err) {
     next(err);
   }
@@ -24,7 +24,7 @@ export const getProjectById = async (req, res, next) => {
   try {
     const project = await projectService.getProjectById(req.supabase, req.params.id);
     if (!project) return next(new ApiError(404, 'Proyecto no encontrado'));
-    res.json(ApiResponse.success('Proyecto', project));
+    res.json(ApiResponse.ok(project, 'Proyecto'));
   } catch (err) {
     next(err);
   }
@@ -33,7 +33,7 @@ export const getProjectById = async (req, res, next) => {
 export const updateProject = async (req, res, next) => {
   try {
     const project = await projectService.updateProject(req.supabase, req.params.id, req.body);
-    res.json(ApiResponse.success('Proyecto actualizado', project));
+    res.json(ApiResponse.ok(project, 'Proyecto actualizado'));
   } catch (err) {
     next(err);
   }
@@ -44,7 +44,7 @@ export const assignCommittee = async (req, res, next) => {
     const { comiteId } = req.body;
     if (!comiteId) return next(new ApiError(400, 'comiteId es requerido'));
     const project = await projectService.assignCommittee(req.supabase, req.params.id, comiteId);
-    res.json(ApiResponse.success('Comité vinculado', project));
+    res.json(ApiResponse.ok(project, 'Comité vinculado'));
   } catch (err) {
     next(err);
   }

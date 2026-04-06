@@ -27,7 +27,7 @@ import { StatusCodes } from 'http-status-codes';
 import { createClient } from '@supabase/supabase-js';
 import { ApiError } from '../utils/apiError.js';
 import { env } from '../config/env.js';
-import { createRequestSupabaseClient } from '../config/supabase.js';
+import { createRequestSupabaseClient, supabaseAdmin } from '../config/supabase.js';
 import { setRequestSupabaseClient } from '../utils/requestContext.js';
 
 // =============================================================================
@@ -59,6 +59,107 @@ const supabase = createClient(
     },
   }
 );
+
+const TECHNICAL_ROLES = new Set(['authenticated', 'anon', 'service_role']);
+
+const pickBusinessRole = (candidates = []) => {
+  const normalized = candidates
+    .filter(Boolean)
+    .map((value) => String(value).toLowerCase());
+
+  return normalized.find((candidate) => !TECHNICAL_ROLES.has(candidate)) || null;
+};
+
+const resolveRoleFromDomainTables = async (userId) => {
+  const checks = [
+    { table: 'super_admin', role: 'super_admin' },
+    { table: 'lider_organizacion', role: 'lider_organizacion' },
+    { table: 'lider_comite', role: 'lider_comite' },
+    { table: 'miembro', role: 'miembro' },
+  ];
+
+  for (const check of checks) {
+    const { data, error } = await supabaseAdmin
+      .from(check.table)
+      .select('id')
+      .eq('id', userId)
+      .limit(1)
+      .maybeSingle();
+
+    if (!error && data) {
+      return check.role;
+    }
+  }
+
+  return null;
+};
+
+const resolveOrganizationId = async (user) => {
+  const metadata = user?.user_metadata || {};
+  const directOrganizationId = (
+    metadata.organizationId
+    || metadata.organization_id
+    || user?.raw_user_meta_data?.organizationId
+    || user?.raw_user_meta_data?.organization_id
+    || null
+  );
+
+  if (directOrganizationId) {
+    return directOrganizationId;
+  }
+
+  const { data: publicUser, error: publicUserError } = await supabaseAdmin
+    .from('usuario')
+    .select('organizationId, organizacionId, organization_id, organizacion_id')
+    .eq('id', user.id)
+    .limit(1)
+    .maybeSingle();
+
+  if (!publicUserError && publicUser) {
+    return (
+      publicUser.organizationId
+      || publicUser.organizacionId
+      || publicUser.organization_id
+      || publicUser.organizacion_id
+      || null
+    );
+  }
+
+  return null;
+};
+
+const resolveBusinessRole = async (user) => {
+  const userMetadata = user?.user_metadata || {};
+  const appMetadata = user?.app_metadata || {};
+
+  const metadataRole = pickBusinessRole([
+    userMetadata.role,
+    appMetadata.role,
+    user.raw_user_meta_data?.role,
+    user.raw_app_meta_data?.role,
+  ]);
+
+  if (metadataRole) {
+    return metadataRole;
+  }
+
+  const { data: publicUser, error: publicUserError } = await supabaseAdmin
+    .from('usuario')
+    .select('role, rol')
+    .eq('id', user.id)
+    .limit(1)
+    .maybeSingle();
+
+  if (!publicUserError && publicUser) {
+    const publicRole = pickBusinessRole([publicUser.role, publicUser.rol]);
+    if (publicRole) {
+      return publicRole;
+    }
+  }
+
+  const domainRole = await resolveRoleFromDomainTables(user.id);
+  return domainRole || 'miembro';
+};
 
 // =============================================================================
 // MIDDLEWARE PRINCIPAL DE AUTENTICACIÓN
@@ -246,6 +347,8 @@ export const authenticate = async (req, res, next) => {
      */
     const userMetadata = user.user_metadata || {};
     const appMetadata = user.app_metadata || {};
+    const resolvedRole = await resolveBusinessRole(user);
+    const resolvedOrganizationId = await resolveOrganizationId(user);
 
     // =========================================================================
     // 6. CONSTRUIR OBJETO DE USUARIO PARA LA APLICACIÓN
@@ -274,13 +377,14 @@ export const authenticate = async (req, res, next) => {
        * @type {string}
        * @default 'miembro' - Rol por defecto si no está especificado
        */
-      role: userMetadata.role || appMetadata.role || 'miembro',
+      role: resolvedRole,
 
       /**
        * ID de la organización asociada (si aplica)
        * @type {string|null}
        */
       organizationId: userMetadata.organization_id || userMetadata.organizationId || null,
+      organizationId: resolvedOrganizationId,
 
       /**
        * Información adicional del perfil

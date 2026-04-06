@@ -20,12 +20,7 @@ export const create = async (transactionData) => {
     const { data, error } = await supabase
       .from(TABLE_NAME)
       .insert(transactionData)
-      .select(`
-        *,
-        organizacion:organizacionId (nombre),
-        proyecto:proyectoId (nombre),
-        creadoPor:creadoPor (email)
-      `)
+      .select('*')
       .maybeSingle();
 
     if (error) {
@@ -46,13 +41,7 @@ export const findById = async (id) => {
   try {
     const { data, error } = await supabase
       .from(TABLE_NAME)
-      .select(`
-        *,
-        organizacion:organizacionId (nombre),
-        proyecto:proyectoId (nombre),
-        creadoPor:creadoPor (email),
-        aprobadoPor:aprobadoPor (email)
-      `)
+      .select('*')
       .eq('id', id)
       .maybeSingle();
 
@@ -81,11 +70,7 @@ export const findAll = async (options = {}) => {
       offset = 0,
     } = options;
 
-    let query = supabase.from(TABLE_NAME).select(`
-      *,
-      organizacion:organizacionId (nombre),
-      proyecto:proyectoId (nombre)
-    `, { count: 'exact' });
+    let query = supabase.from(TABLE_NAME).select('*', { count: 'exact' });
 
     if (organizacionId) {
       query = query.eq('organizacionId', organizacionId);

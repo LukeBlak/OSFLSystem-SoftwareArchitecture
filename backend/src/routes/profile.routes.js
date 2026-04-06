@@ -3,7 +3,7 @@ import profileController from '../controllers/profile.controller.js';
 import { authenticate } from '../middleware/auth.middleware.js';
 import { requireRole } from '../middleware/role.middleware.js';
 import { USER_ROLES as ROLES } from '../models/User.js';
-import { upload } from '../middleware/upload.middleware.js';
+import { uploadAvatar } from '../middleware/upload.middleware.js';
 import { validate } from '../middleware/validation.middleware.js';
 import {
 	updateProfileSchema,
@@ -35,7 +35,7 @@ router.put(
 router.post(
 	'/avatar',
 	canAccessProfile,
-	upload.single('avatar'),
+	uploadAvatar.single('avatar'),
 	profileController.uploadAvatar
 );
 
@@ -46,6 +46,34 @@ router.put(
 	canAccessProfile,
 	validate(changePasswordSchema),
 	profileController.changePassword
+);
+
+router.get(
+	'/users',
+	authenticate,
+	requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN]),
+	profileController.listUsers
+);
+
+router.post(
+	'/users',
+	authenticate,
+	requireRole([ROLES.SUPER_ADMIN]),
+	profileController.createUser
+);
+
+router.put(
+	'/users/:id',
+	authenticate,
+	requireRole([ROLES.SUPER_ADMIN]),
+	profileController.updateUser
+);
+
+router.delete(
+	'/users/:id',
+	authenticate,
+	requireRole([ROLES.SUPER_ADMIN]),
+	profileController.deleteUser
 );
 
 export default router;
