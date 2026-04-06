@@ -63,7 +63,7 @@ function RecuperarPassword() {
     setLoading(true);
 
     try {
-      console.log('📤 Request forgot-password:', { email });
+      console.log('Request forgot-password:', { email });
       
       const response = await fetch(`${API_URL}/auth/forgot-password`, {
         method: 'POST',
@@ -73,11 +73,9 @@ function RecuperarPassword() {
 
       console.log('📥 Response status:', response.status);
       
-      // ⚠️ IMPORTANTE: Por seguridad, el backend DEBE retornar 200 siempre
-      // incluso si el email no está registrado. No mostramos errores de "usuario no encontrado".
       if (!response.ok) {
         const errorMsg = await readErrorMessage(response, 'No se pudo procesar la solicitud');
-        console.error('❌ Error en forgot-password:', errorMsg);
+        console.error(' Error en forgot-password:', errorMsg);
         throw new Error(errorMsg);
       }
 
@@ -85,7 +83,7 @@ function RecuperarPassword() {
       setSuccess(true);
       
     } catch (err) {
-      console.error('❌ Exception en forgot-password:', err);
+      console.error(' Exception en forgot-password:', err);
       setError(err.message || 'Ocurrió un error inesperado');
     } finally {
       setLoading(false);
@@ -110,7 +108,7 @@ function RecuperarPassword() {
     setLoading(true);
 
     try {
-      console.log('📤 Request reset-password:', { token: token ? '***' : 'empty' });
+      console.log(' Request reset-password:', { token: token ? '***' : 'empty' });
       
       const response = await fetch(`${API_URL}/auth/reset-password`, {
         method: 'POST',
@@ -122,18 +120,18 @@ function RecuperarPassword() {
         }),
       });
 
-      console.log('📥 Response status:', response.status);
+      console.log(' Response status:', response.status);
 
       if (!response.ok) {
         const errorMsg = await readErrorMessage(response, 'Error al restablecer la contraseña');
-        console.error('❌ Error en reset-password:', errorMsg);
+        console.error(' Error en reset-password:', errorMsg);
         throw new Error(errorMsg);
       }
 
       setSuccess(true);
       
     } catch (err) {
-      console.error('❌ Exception en reset-password:', err);
+      console.error(' Exception en reset-password:', err);
       setError(err.message || 'Ocurrió un error inesperado');
     } finally {
       setLoading(false);
