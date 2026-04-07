@@ -6,6 +6,7 @@ import authService from '../../services/authService';
 
 const normalizeHistory = (response) => {
   const payload = response?.data || {};
+  const summaryPayload = payload.resumen || payload.summary || {};
   const records = Array.isArray(payload.registros) ? payload.registros : [];
 
   const normalizedRecords = records.map((record) => ({
@@ -13,16 +14,26 @@ const normalizeHistory = (response) => {
     projectName: record.proyecto?.nombre || record.projectName || 'Proyecto',
     hours: record.cantidadhoras ?? record.cantidadHoras ?? record.hours ?? 0,
     date: record.fecha || record.date,
-    status: record.validado
-      ? 'validada'
-      : record.aprobado
-        ? 'aprobada'
+    status: record.estado
+      ? String(record.estado).toLowerCase()
+      : record.validado
+        ? (record.aprobado ? 'validada' : 'rechazada')
         : 'pendiente',
   }));
 
-  const totalHoras = Number(payload.totalHoras || 0);
+  const fallbackTotal = normalizedRecords
+    .filter((record) => record.status === 'validada' || (record.validado && record.aprobado))
+    .reduce((sum, record) => sum + Number(record.hours || 0), 0);
+
+  const totalHoras = Number(
+    summaryPayload.horasTotales
+    ?? payload.totalHoras
+    ?? fallbackTotal
+    ?? 0
+  );
+
   const horasValidadas = normalizedRecords
-    .filter((record) => record.validado || record.status === 'validada')
+    .filter((record) => record.status === 'validada' || (record.validado && record.aprobado))
     .reduce((sum, record) => sum + Number(record.hours || 0), 0);
 
   const horasPendientes = totalHoras - horasValidadas;
@@ -33,9 +44,9 @@ const normalizeHistory = (response) => {
     records: normalizedRecords,
     summary: {
       horasTotales: totalHoras,
-      horasValidadas,
-      horasPendientes: horasPendientes > 0 ? horasPendientes : 0,
-      registrosTotales: normalizedRecords.length,
+      horasValidadas: Number(summaryPayload.horasValidadas ?? horasValidadas),
+      horasPendientes: Number(summaryPayload.horasPendientes ?? (horasPendientes > 0 ? horasPendientes : 0)),
+      registrosTotales: Number(summaryPayload.registrosTotales ?? normalizedRecords.length),
     },
     pagination: response?.metadata?.pagination || response?.pagination || null,
   };

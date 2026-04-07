@@ -149,15 +149,16 @@ export const getTotalHoursByMember = async (miembroId) => {
   try {
     const { data, error } = await supabase
       .from(TABLE_NAME)
-      .select('cantidadHoras')
-      .eq('miembroId', miembroId)
-      .eq('estado', 'validada');
+      .select('cantidadhoras')
+      .eq('miembroid', miembroId)
+      .eq('validado', true)
+      .eq('aprobado', true);
 
     if (error) {
       return { total: 0, error };
     }
 
-    const total = data?.reduce((sum, h) => sum + (parseFloat(h.cantidadHoras) || 0), 0) || 0;
+    const total = data?.reduce((sum, h) => sum + (parseFloat(h.cantidadhoras) || 0), 0) || 0;
 
     return { total, error: null };
   } catch (error) {
@@ -174,11 +175,12 @@ export const getHoursByProject = async (proyectoId) => {
     const { data, error } = await supabase
       .from(TABLE_NAME)
       .select(`
-        cantidadHoras,
-        miembro:miembroId (nombre)
+        cantidadhoras,
+        miembro:miembroid (nombre)
       `)
-      .eq('proyectoId', proyectoId)
-      .eq('estado', 'validada');
+      .eq('proyectoid', proyectoId)
+      .eq('validado', true)
+      .eq('aprobado', true);
 
     return { data: data || [], error };
   } catch (error) {
@@ -194,8 +196,8 @@ export const existsForDate = async (miembroId, proyectoId, fecha) => {
     const { data, error } = await supabase
       .from(TABLE_NAME)
       .select('id')
-      .eq('miembroId', miembroId)
-      .eq('proyectoId', proyectoId)
+      .eq('miembroid', miembroId)
+      .eq('proyectoid', proyectoId)
       .eq('fecha', fecha)
       .maybeSingle();
 

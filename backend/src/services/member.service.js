@@ -1323,11 +1323,26 @@ export const validateHours = async (hoursRecordId, aprobado, validatedBy, observ
     });
 
     if (error || !updatedRecord) {
+      logger.error('Error al actualizar registro de horas en validateHours', {
+        hoursRecordId,
+        validatedBy,
+        aprobado,
+        repositoryError: error,
+      });
       throw ApiError.internal('Error al validar las horas');
     }
 
     // Actualizar horas totales del miembro
-    await MemberRepository.updateTotalHours(updatedRecord.miembroid);
+    const { error: recalcError } = await MemberRepository.updateTotalHours(updatedRecord.miembroid);
+
+    if (recalcError) {
+      logger.error('Error al recalcular horas totales del miembro', {
+        memberId: updatedRecord.miembroid,
+        hoursRecordId,
+        recalcError,
+      });
+      throw ApiError.internal('Error al validar las horas');
+    }
 
     logger.info('Horas validadas', {
       hoursRecordId,

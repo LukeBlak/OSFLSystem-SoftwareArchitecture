@@ -4,6 +4,50 @@ import { getRequestSupabaseClient } from '../utils/requestContext.js';
 const TABLE = 'miembro';
 const getDb = () => getRequestSupabaseClient() || supabase;
 
+const mapHoursPayloadToDb = (payload = {}) => {
+  const mapped = { ...payload };
+
+  if (payload.cantidadHoras !== undefined || payload.cantidadhoras !== undefined) {
+    mapped.cantidadhoras = payload.cantidadHoras ?? payload.cantidadhoras;
+    delete mapped.cantidadHoras;
+  }
+
+  if (payload.modificadoPor !== undefined || payload.modificado_por !== undefined) {
+    mapped.modificado_por = payload.modificadoPor ?? payload.modificado_por;
+    delete mapped.modificadoPor;
+  }
+
+  if (payload.fechaEdicion !== undefined || payload.fecha_edicion !== undefined) {
+    mapped.fecha_edicion = payload.fechaEdicion ?? payload.fecha_edicion;
+    delete mapped.fechaEdicion;
+  }
+
+  if (payload.miembroId !== undefined || payload.miembroid !== undefined) {
+    mapped.miembroid = payload.miembroId ?? payload.miembroid;
+    delete mapped.miembroId;
+  }
+
+  if (payload.proyectoId !== undefined || payload.proyectoid !== undefined) {
+    mapped.proyectoid = payload.proyectoId ?? payload.proyectoid;
+    delete mapped.proyectoId;
+  }
+
+  return mapped;
+};
+
+const filterPayloadByExistingKeys = (payload = {}, existingRow = {}) => {
+  const existingKeys = new Set(Object.keys(existingRow || {}));
+  const filtered = {};
+
+  Object.entries(payload).forEach(([key, value]) => {
+    if (existingKeys.has(key) && value !== undefined) {
+      filtered[key] = value;
+    }
+  });
+
+  return filtered;
+};
+
 const wrapEntity = (row) => (row ? { ...row, data: row, error: null } : null);
 
 const hasPagination = (filters = {}) => Number.isFinite(filters.limit) || Number.isFinite(filters.offset);
@@ -308,9 +352,10 @@ export const MemberRepository = {
   },
 
   async createHoursRecord(payload) {
+    const dbPayload = mapHoursPayloadToDb(payload);
     const { data, error } = await getDb()
       .from('registro_horas')
-      .insert(payload)
+      .insert(dbPayload)
       .select('*')
       .single();
 
@@ -318,9 +363,27 @@ export const MemberRepository = {
   },
 
   async updateHoursRecord(recordId, payload) {
-    const { data, error } = await getDb()
+    const dbPayload = mapHoursPayloadToDb(payload);
+
+    const { data: existingRecord, error: existingRecordError } = await supabaseAdmin
       .from('registro_horas')
-      .update(payload)
+      .select('*')
+      .eq('id', recordId)
+      .maybeSingle();
+
+    if (existingRecordError || !existingRecord) {
+      return { data: null, error: existingRecordError || new Error('Registro de horas no encontrado') };
+    }
+
+    const safePayload = filterPayloadByExistingKeys(dbPayload, existingRecord);
+
+    if (Object.keys(safePayload).length === 0) {
+      return { data: existingRecord, error: null };
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('registro_horas')
+      .update(safePayload)
       .eq('id', recordId)
       .select('*')
       .single();
@@ -329,18 +392,36 @@ export const MemberRepository = {
   },
 
   async updateTotalHours(memberId) {
-    const { data: hours } = await getDb()
+    const { data: hours, error: hoursError } = await supabaseAdmin
       .from('registro_horas')
-      .select('cantidadHoras')
+      .select('*')
       .eq('miembroid', memberId)
       .eq('validado', true)
       .eq('aprobado', true);
 
-    const total = (hours || []).reduce((sum, item) => sum + (parseFloat(item.cantidadHoras) || 0), 0);
+    if (hoursError) {
+      return { error: hoursError };
+    }
 
-    return getDb()
+    const total = (hours || []).reduce(
+      (sum, item) => sum + (parseFloat(item.cantidadhoras ?? item.cantidadHoras) || 0),
+      0
+    );
+
+    const { error: updateSnakeError } = await supabaseAdmin
+      .from(TABLE)
+      .update({ horastotales: total })
+      .eq('id', memberId);
+
+    if (!updateSnakeError) {
+      return { error: null };
+    }
+
+    const { error: updateCamelError } = await supabaseAdmin
       .from(TABLE)
       .update({ horasTotales: total })
       .eq('id', memberId);
+
+    return { error: updateCamelError || updateSnakeError };
   },
 };
