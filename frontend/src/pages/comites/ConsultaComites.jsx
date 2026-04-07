@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, Filter, Plus, Users, FolderKanban } from 'lucide-react';
+import { getCommittees } from '../../services/committeeService';
 
 const ConsultaComites = () => {
     const navigate = useNavigate();
@@ -16,38 +17,25 @@ const ConsultaComites = () => {
     const loadComites = async () => {
         setLoading(true);
         try {
-            await new Promise(resolve => setTimeout(resolve, 500));
-            setComites([
-                {
-                    id: 1,
-                    nombre: 'Logística',
-                    descripcion: 'Coordinación de eventos y recursos',
-                    areaEnfoque: 'Operaciones',
-                    lider: 'Juan Pérez',
-                    miembros: 8,
-                    fechaCreacion: '2025-01-25'
-                },
-                {
-                    id: 2,
-                    nombre: 'Comunicación',
-                    descripcion: 'Gestión de redes y difusión',
-                    areaEnfoque: 'Marketing',
-                    lider: 'Sofia Torres',
-                    miembros: 5,
-                    fechaCreacion: '2025-02-01'
-                },
-                {
-                    id: 3,
-                    nombre: 'Finanzas',
-                    descripcion: 'Control presupuestario',
-                    areaEnfoque: 'Administración',
-                    lider: 'Laura Sánchez',
-                    miembros: 3,
-                    fechaCreacion: '2025-01-30'
-                }
-            ]);
+            const response = await getCommittees({ limit: 100 });
+    
+            const items = Array.isArray(response?.data)
+                ? response.data
+                : response?.data?.committees || response?.data || [];
+    
+            setComites(
+                items.map((comite) => ({
+                    id: comite.id,
+                    nombre: comite.nombre || 'Sin nombre',
+                    descripcion: comite.descripcion || 'Sin descripción',
+                    areaEnfoque: comite.arearesponsabilidad || comite.areaEnfoque || 'Sin área',
+                    lider: comite.lider?.nombre || comite.liderNombre || 'No asignado',
+                    miembros: comite.totalMiembros || comite.miembros || 0,
+                    fechaCreacion: comite.fechacreacion || comite.fechaCreacion || new Date().toISOString(),
+                }))
+            );
         } catch (error) {
-            alert('Error al cargar comités');
+            alert(error.userMessage || error.message || 'Error al cargar comités');
         } finally {
             setLoading(false);
         }
