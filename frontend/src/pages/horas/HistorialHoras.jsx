@@ -4,51 +4,30 @@ import { Clock, Calendar, FolderKanban, Award, TrendingUp, Download, User, Check
 import { getMyHistory } from '../../services/hoursService';
 import authService from '../../services/authService';
 
-const normalizeHistory = (response) => {
-  const payload = response?.data || {};
-  const summaryPayload = payload.resumen || payload.summary || {};
-  const records = Array.isArray(payload.registros) ? payload.registros : [];
+const normalizeHistory = (payload) => {
+  const records = Array.isArray(payload?.registros) ? payload.registros : [];
 
   const normalizedRecords = records.map((record) => ({
     ...record,
-    projectName: record.proyecto?.nombre || record.projectName || 'Proyecto',
-    hours: record.cantidadhoras ?? record.cantidadHoras ?? record.hours ?? 0,
-    date: record.fecha || record.date,
-    status: record.estado
-      ? String(record.estado).toLowerCase()
-      : record.validado
-        ? (record.aprobado ? 'validada' : 'rechazada')
-        : 'pendiente',
+    projectName: record.proyecto?.nombre || "Proyecto Social",
+    hours: Number(record.cantidadhoras || 0),
+    date: record.fecha,
+    status: record.estado || (record.aprobado ? 'validada' : 'pendiente')
   }));
 
-  const fallbackTotal = normalizedRecords
-    .filter((record) => record.status === 'validada' || (record.validado && record.aprobado))
-    .reduce((sum, record) => sum + Number(record.hours || 0), 0);
-
-  const totalHoras = Number(
-    summaryPayload.horasTotales
-    ?? payload.totalHoras
-    ?? fallbackTotal
-    ?? 0
-  );
-
   const horasValidadas = normalizedRecords
-    .filter((record) => record.status === 'validada' || (record.validado && record.aprobado))
-    .reduce((sum, record) => sum + Number(record.hours || 0), 0);
-
-  const horasPendientes = totalHoras - horasValidadas;
+    .filter(r => r.estado === 'validada' || r.aprobado === true)
+    .reduce((sum, r) => sum + r.hours, 0);
 
   return {
-    member: payload.miembro || null,
-    memberId: payload.miembroId || null,
+    member: records[0]?.miembro || null,
     records: normalizedRecords,
     summary: {
-      horasTotales: totalHoras,
-      horasValidadas: Number(summaryPayload.horasValidadas ?? horasValidadas),
-      horasPendientes: Number(summaryPayload.horasPendientes ?? (horasPendientes > 0 ? horasPendientes : 0)),
-      registrosTotales: Number(summaryPayload.registrosTotales ?? normalizedRecords.length),
+      horasTotales: horasValidadas,
+      horasValidadas: horasValidadas,
+      horasPendientes: 0,
+      registrosTotales: normalizedRecords.length,
     },
-    pagination: response?.metadata?.pagination || response?.pagination || null,
   };
 };
 
@@ -65,30 +44,27 @@ const HistorialHoras = () => {
   }, []);
 
   const loadHistory = async () => {
-    setLoading(true);
-    setError('');
-    try {
-      if (!currentUser?.id) {
-        throw new Error('No se pudo identificar el usuario actual');
-      }
-      
-      const response = await getMyHistory({ limit: 100 });
-      const payload = normalizeHistory(response);
+  setLoading(true);
+  setError('');
+  try {
+    const response = await getMyHistory({ limit: 100 });
+    
+    const dataProvista = response.data || response; 
 
-      setMemberInfo(payload.member || {
-        nombre: currentUser?.profile?.nombre || currentUser?.name || 'Miembro',
-        email: currentUser?.email || '',
-        committee: currentUser?.profile?.comite || 'Sin comité',
-        joinDate: currentUser?.createdAt || null,
-      });
-      setSummary(payload.summary);
-      setActivities(payload.records);
-    } catch (apiError) {
-      setError(apiError.userMessage || apiError.message || 'Error al cargar el historial');
-    } finally {
-      setLoading(false);
-    }
-  };
+    const payload = normalizeHistory(dataProvista);
+
+    setMemberInfo(payload.member || {
+      nombre: currentUser?.profile?.nombre || 'Miembro',
+      email: currentUser?.email || '',
+    });
+    setSummary(payload.summary);
+    setActivities(payload.records);
+  } catch (apiError) {
+    setError('Error al cargar el historial');
+  } finally {
+    setLoading(false);
+  }
+};
 
   const totalHours = Number(summary.horasTotales || 0);
 
