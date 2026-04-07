@@ -1,260 +1,188 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import Navbar from '../../components/Navbar';
-import { Search, Filter, Plus, Edit2, Trash2, Loader } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { Plus, Search, Filter, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
+import InstitutionCard from '../../components/InstitutionCard.jsx';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+const OrganizationsListPage = () => {
+  const [organizations, setOrganizations] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  
+  // Estados para filtros y paginación (basados en el controlador backend)
+  const [filters, setFilters] = useState({
+    search: '',
+    tipo: '',
+    page: 1,
+    limit: 10
+  });
+  const [pagination, setPagination] = useState({
+    total: 0,
+    totalPages: 1
+  });
 
-const ConsultaOrganizaciones = () => {
-    const navigate = useNavigate();
-    const [organizaciones, setOrganizaciones] = useState([]);
-    const [busqueda, setBusqueda] = useState('');
-    const [filtroEstado, setFiltroEstado] = useState('todos');
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
-    const [deleteModal, setDeleteModal] = useState({ show: false, id: null });
+  const fetchOrganizations = async () => {
+    setLoading(true);
+    try {
+      const queryParams = new URLSearchParams({
+        page: filters.page,
+        limit: filters.limit,
+        search: filters.search,
+        tipo: filters.tipo,
+        estado: 'activo' // Por defecto mostramos activos
+      }).toString();
 
-    useEffect(() => {
-        loadOrganizaciones();
-    }, []);
-
-    const loadOrganizaciones = async () => {
-        setLoading(true);
-        setError(null);
-        try {
-            const response = await fetch(`${API_URL}/organizations`, {
-                headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`
-                }
-            });
-
-            if (!response.ok) {
-                throw new Error('Error al cargar organizaciones');
-            }
-
-            const data = await response.json();
-            setOrganizaciones(data.data?.organizations || []);
-        } catch (error) {
-            setError(error.message);
-            console.error('Error loading organizations:', error);
-        } finally {
-            setLoading(false);
+      const response = await fetch(`/api/organizations?${queryParams}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
-    };
+      });
 
-    const handleDelete = async (id) => {
-        try {
-            const response = await fetch(`${API_URL}/organizations/${id}`, {
-                method: 'DELETE',
-                headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`
-                }
-            });
+      if (!response.ok) throw new Error('Error al obtener las organizaciones');
 
-            if (!response.ok) {
-                throw new Error('Error al eliminar organización');
-            }
-
-            setOrganizaciones(organizaciones.filter(org => org.id !== id));
-            setDeleteModal({ show: false, id: null });
-        } catch (error) {
-            alert('Error: ' + error.message);
-        }
-    };
-
-    const organizacionesFiltradas = organizaciones.filter(org => {
-        const coincideBusqueda = org.nombre?.toLowerCase().includes(busqueda.toLowerCase());
-        const coincideEstado = filtroEstado === 'todos';
-        return coincideBusqueda && coincideEstado;
-    });
-
-    if (loading) {
-        return (
-            <div className="min-h-screen bg-[#f8faf9]">
-                <Navbar />
-                <main className="container mx-auto px-6 pt-28 pb-12">
-                    <div className="flex items-center justify-center py-12">
-                        <Loader className="animate-spin text-[#0d9488]" size={32} />
-                    </div>
-                </main>
-            </div>
-        );
+      const result = await response.json();
+      setOrganizations(result.data.organizations);
+      setPagination(result.data.pagination);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
     }
+  };
 
-    return (
-        <div className="min-h-screen bg-[#f8faf9]">
-            <Navbar />
-            
-            <main className="container mx-auto px-6 pt-28 pb-12 max-w-7xl">
-                {/* Header */}
-                <div className="mb-8">
-                    <h2 className="font-poppins font-bold text-2xl text-text-primary mb-2">
-                        Gestionar Organizaciones
-                    </h2>
-                    <p className="font-inter text-text-secondary">
-                        Administra y monitorea todas las organizaciones en la plataforma
-                    </p>
-                </div>
+  useEffect(() => {
+    fetchOrganizations();
+  }, [filters.page, filters.tipo]); // Recargar al cambiar página o tipo
 
-                {error && (
-                    <div className="card p-4 mb-6 bg-red-50 border border-red-200">
-                        <p className="text-red-700 font-inter">{error}</p>
-                        <button
-                            onClick={loadOrganizaciones}
-                            className="mt-2 text-red-600 hover:text-red-800 underline text-sm"
-                        >
-                            Reintentar
-                        </button>
-                    </div>
-                )}
+  // Función para manejar la búsqueda (debounce manual al presionar Enter o botón)
+  const handleSearch = (e) => {
+    if (e.key === 'Enter' || e.type === 'click') {
+      setFilters(prev => ({ ...prev, page: 1 }));
+      fetchOrganizations();
+    }
+  };
 
-                {/* Filtros */}
-                <div className="card p-4 mb-6">
-                    <div className="flex flex-col md:flex-row gap-4">
-                        <div className="relative flex-1">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary" size={20} />
-                            <input
-                                type="text"
-                                className="input-field pl-10"
-                                placeholder="Buscar por nombre..."
-                                value={busqueda}
-                                onChange={(e) => setBusqueda(e.target.value)}
-                            />
-                        </div>
-                        <div className="relative">
-                            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary" size={20} />
-                            <select
-                                className="input-field pl-10 pr-8 appearance-none"
-                                value={filtroEstado}
-                                onChange={(e) => setFiltroEstado(e.target.value)}
-                            >
-                                <option value="todos">Todos los estados</option>
-                                <option value="activa">Activas</option>
-                                <option value="inactiva">Inactivas</option>
-                            </select>
-                        </div>
-                        <button
-                            onClick={() => navigate('/admin/organizaciones/nueva')}
-                            className="flex items-center gap-2 px-4 py-2 bg-[#0d9488] text-white rounded-lg
-                                     hover:bg-[#0a7a73] transition-colors duration-200 font-inter font-semibold whitespace-nowrap"
-                        >
-                            <Plus size={18} />
-                            Nueva
-                        </button>
-                    </div>
-                </div>
+  // Callback cuando se elimina una organización desde la Card
+  const handleDeleteRefresh = (id) => {
+    setOrganizations(prev => prev.filter(org => org.id !== id));
+  };
 
-                {/* Tabla de Organizaciones */}
-                {organizacionesFiltradas.length === 0 ? (
-                    <div className="card p-12 text-center">
-                        <p className="font-inter text-text-secondary mb-4">
-                            No hay organizaciones registradas
-                        </p>
-                        <button
-                            onClick={() => navigate('/admin/organizaciones/nueva')}
-                            className="inline-flex items-center gap-2 px-4 py-2 bg-[#0d9488] text-white rounded-lg
-                                     hover:bg-[#0a7a73] transition-colors duration-200 font-inter font-semibold"
-                        >
-                            <Plus size={18} />
-                            Crear Primera Organización
-                        </button>
-                    </div>
-                ) : (
-                    <div className="card overflow-hidden">
-                        <div className="overflow-x-auto">
-                            <table className="w-full">
-                                <thead>
-                                    <tr className="border-b border-gray-200 bg-gray-50">
-                                        <th className="px-6 py-4 text-left font-inter font-semibold text-text-primary text-sm">
-                                            Nombre
-                                        </th>
-                                        <th className="px-6 py-4 text-left font-inter font-semibold text-text-primary text-sm">
-                                            Tipo
-                                        </th>
-                                        <th className="px-6 py-4 text-left font-inter font-semibold text-text-primary text-sm">
-                                            Email
-                                        </th>
-                                        <th className="px-6 py-4 text-left font-inter font-semibold text-text-primary text-sm">
-                                            Fecha Creación
-                                        </th>
-                                        <th className="px-6 py-4 text-right font-inter font-semibold text-text-primary text-sm">
-                                            Acciones
-                                        </th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {organizacionesFiltradas.map((org, idx) => (
-                                        <tr key={org.id || idx} className="border-b border-gray-200 hover:bg-gray-50 transition-colors">
-                                            <td className="px-6 py-4 font-inter text-text-primary">
-                                                {org.nombre}
-                                            </td>
-                                            <td className="px-6 py-4 font-inter text-text-secondary text-sm">
-                                                {org.tipo || 'N/A'}
-                                            </td>
-                                            <td className="px-6 py-4 font-inter text-text-secondary text-sm">
-                                                {org.email || 'N/A'}
-                                            </td>
-                                            <td className="px-6 py-4 font-inter text-text-secondary text-sm">
-                                                {org.fechaCreacion ? new Date(org.fechaCreacion).toLocaleDateString() : 'N/A'}
-                                            </td>
-                                            <td className="px-6 py-4 text-right">
-                                                <div className="flex items-center justify-end gap-2">
-                                                    <button
-                                                        onClick={() => navigate(`/admin/organizaciones/${org.id}/editar`)}
-                                                        className="p-2 hover:bg-gray-100 rounded transition-colors"
-                                                        title="Editar"
-                                                    >
-                                                        <Edit2 size={18} className="text-[#3b82f6]" />
-                                                    </button>
-                                                    <button
-                                                        onClick={() => setDeleteModal({ show: true, id: org.id })}
-                                                        className="p-2 hover:bg-gray-100 rounded transition-colors"
-                                                        title="Eliminar"
-                                                    >
-                                                        <Trash2 size={18} className="text-red-500" />
-                                                    </button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                )}
+  return (
+    <div className="min-h-screen bg-[#F8FAF9] p-6 md:p-10">
+      <div className="max-w-7xl mx-auto">
+        
+        {/* Encabezado de la página */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
+          <div>
+            <h1 className="font-['Poppins'] text-3xl font-bold text-[#1F2937]">
+              Gestión de Organizaciones
+            </h1>
+            <p className="font-['Inter'] text-[#64748B] mt-1">
+              Administra y supervisa todas las instituciones registradas en el sistema.
+            </p>
+          </div>
 
-                {/* Delete Modal */}
-                {deleteModal.show && (
-                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                        <div className="card p-6 max-w-sm mx-4">
-                            <h3 className="font-poppins font-bold text-lg text-text-primary mb-4">
-                                Eliminar Organización
-                            </h3>
-                            <p className="font-inter text-text-secondary mb-6">
-                                ¿Estás seguro de que deseas eliminar esta organización? Esta acción no se puede deshacer.
-                            </p>
-                            <div className="flex gap-4">
-                                <button
-                                    onClick={() => setDeleteModal({ show: false, id: null })}
-                                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50
-                                             transition-colors font-inter font-semibold text-text-primary"
-                                >
-                                    Cancelar
-                                </button>
-                                <button
-                                    onClick={() => handleDelete(deleteModal.id)}
-                                    className="flex-1 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600
-                                             transition-colors font-inter font-semibold"
-                                >
-                                    Eliminar
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                )}
-            </main>
+          <Link
+            to="/RegistroOrganizacion"
+            className="flex items-center justify-center gap-2 bg-[#22C55E] hover:bg-[#16A34A] text-[#FFFFFF] px-6 py-3 rounded-xl font-['Inter'] font-semibold transition-all shadow-lg shadow-green-100"
+          >
+            <Plus className="w-5 h-5" />
+            Nueva Organización
+          </Link>
         </div>
-    );
+
+        {/* Barra de Filtros */}
+        <div className="bg-[#FFFFFF] border border-[#E2E8F0] rounded-2xl p-4 mb-8 flex flex-col md:flex-row gap-4 items-center">
+          <div className="relative flex-grow w-full">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[#64748B] w-5 h-5" />
+            <input
+              type="text"
+              placeholder="Buscar por nombre o descripción..."
+              className="w-full pl-10 pr-4 py-2 border border-[#E2E8F0] rounded-lg focus:outline-none focus:border-[#38BDF8] font-['Inter'] text-[#1F2937]"
+              value={filters.search}
+              onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+              onKeyDown={handleSearch}
+            />
+          </div>
+          
+          <div className="flex items-center gap-4 w-full md:w-auto">
+            <div className="relative w-full md:w-48">
+              <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-[#64748B] w-4 h-4" />
+              <select
+                className="w-full pl-9 pr-4 py-2 border border-[#E2E8F0] rounded-lg appearance-none focus:outline-none focus:border-[#38BDF8] font-['Inter'] text-[#64748B] bg-white"
+                value={filters.tipo}
+                onChange={(e) => setFilters({ ...filters, tipo: e.target.value, page: 1 })}
+              >
+                <option value="">Todos los tipos</option>
+                <option value="ONG">ONG</option>
+                <option value="Fundación">Fundación</option>
+                <option value="Gubernamental">Gubernamental</option>
+                <option value="Privada">Privada</option>
+              </select>
+            </div>
+            
+            <button 
+              onClick={fetchOrganizations}
+              className="bg-[#DCECE7] text-[#22C55E] p-2 rounded-lg hover:bg-[#22C55E] hover:text-white transition-colors"
+            >
+              <Search className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+
+        {/* Lista de Organizaciones */}
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-20">
+            <Loader2 className="w-12 h-12 text-[#22C55E] animate-spin" />
+            <p className="mt-4 font-['Inter'] text-[#64748B]">Cargando organizaciones...</p>
+          </div>
+        ) : error ? (
+          <div className="bg-red-50 text-red-600 p-6 rounded-xl border border-red-100 text-center font-['Inter']">
+            {error}
+          </div>
+        ) : organizations.length === 0 ? (
+          <div className="text-center py-20 bg-white rounded-2xl border border-dashed border-[#E2E8F0]">
+            <p className="font-['Poppins'] text-[#64748B] text-lg">No se encontraron organizaciones.</p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {organizations.map((org) => (
+              <InstitutionCard 
+                key={org.id} 
+                organization={org} 
+                onDelete={handleDeleteRefresh}
+                onUpdate={(updatedOrg) => console.log('Update direct:', updatedOrg)}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* Paginación */}
+        {!loading && organizations.length > 0 && (
+          <div className="mt-10 flex items-center justify-between border-t border-[#E2E8F0] pt-6">
+            <p className="font-['Inter'] text-sm text-[#64748B]">
+              Mostrando página <span className="font-bold text-[#1F2937]">{pagination.page}</span> de <span className="font-bold text-[#1F2937]">{pagination.totalPages}</span>
+            </p>
+            <div className="flex gap-2">
+              <button
+                disabled={filters.page === 1}
+                onClick={() => setFilters(prev => ({ ...prev, page: prev.page - 1 }))}
+                className="p-2 border border-[#E2E8F0] rounded-lg hover:bg-[#E0F2FE] disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+              >
+                <ChevronLeft className="w-5 h-5 text-[#1F2937]" />
+              </button>
+              <button
+                disabled={filters.page === pagination.totalPages}
+                onClick={() => setFilters(prev => ({ ...prev, page: prev.page + 1 }))}
+                className="p-2 border border-[#E2E8F0] rounded-lg hover:bg-[#E0F2FE] disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+              >
+                <ChevronRight className="w-5 h-5 text-[#1F2937]" />
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 };
 
-export default ConsultaOrganizaciones;
+export default OrganizationsListPage;

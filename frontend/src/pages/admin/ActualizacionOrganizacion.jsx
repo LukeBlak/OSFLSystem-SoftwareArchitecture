@@ -1,38 +1,74 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { ArrowLeft, Loader2, Save } from 'lucide-react';
 
-const RegisterOrganization = () => {
-  // Estado inicial del formulario basado en los campos del controlador
+const ActualizacionOrganizacion = () => {
+  const { id } = useParams(); // Captura el ID desde la URL
+  const navigate = useNavigate();
+
   const [formData, setFormData] = useState({
     nombre: '',
-    tipo: 'ONG', // Valor por defecto según el servicio
+    tipo: 'ONG',
     descripcion: '',
     direccion: '',
     telefono: '',
     email: '',
   });
 
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true); // Para la carga inicial de datos
+  const [updating, setUpdating] = useState(false); // Para el proceso de fetch PUT
   const [status, setStatus] = useState({ type: '', message: '' });
+
+  // 1. Cargar los datos actuales de la organización al montar el componente
+  useEffect(() => {
+    const fetchOrganizationData = async () => {
+      try {
+        const response = await fetch(`/api/organizations/${id}`, {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          }
+        });
+        const result = await response.json();
+
+        if (!response.ok) throw new Error(result.message || 'No se pudo cargar la información');
+
+        // Llenamos el formulario con los datos recibidos (el backend devuelve un objeto organization)
+        const org = result.data.organization;
+        setFormData({
+          nombre: org.nombre || '',
+          tipo: org.tipo || 'ONG',
+          descripcion: org.descripcion || '',
+          direccion: org.direccion || '',
+          telefono: org.telefono || '',
+          email: org.email || '',
+        });
+      } catch (error) {
+        setStatus({ type: 'error', message: error.message });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchOrganizationData();
+  }, [id]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+    setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
+  // 2. Lógica de Actualización (PUT)
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true);
+    setUpdating(true);
     setStatus({ type: '', message: '' });
 
     try {
-      const response = await fetch('/api/organizations', {
-        method: 'POST',
+      const response = await fetch(`/api/organizations/${id}`, {
+        method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}` // Ejemplo de recuperación de token
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
         },
         body: JSON.stringify(formData),
       });
@@ -40,47 +76,52 @@ const RegisterOrganization = () => {
       const result = await response.json();
 
       if (!response.ok) {
-        throw new Error(result.message || 'Error al registrar la organización');
+        throw new Error(result.message || 'Error al actualizar la organización');
       }
 
       setStatus({
         type: 'success',
-        message: result.message || 'Organización registrada exitosamente',
+        message: 'Organización actualizada correctamente. Redirigiendo...',
       });
       
-      // Limpiar formulario tras éxito
-      setFormData({
-        nombre: '',
-        tipo: 'ONG',
-        descripcion: '',
-        direccion: '',
-        telefono: '',
-        email: '',
-      });
-
-    } catch (error) {
-      setStatus({
-        type: 'error',
-        message: error.message,
-      });
-    } finally {
-      setLoading(false);
+      // 3. Redirigir a la lista después de un breve delay para mostrar éxito
       setTimeout(() => {
         navigate('/organizations'); // Ajustar esta ruta a la del router
       }, 1500);
+
+    } catch (error) {
+      setStatus({ type: 'error', message: error.message });
+      setUpdating(false);
     }
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#F8FAF9]">
+        <Loader2 className="w-10 h-10 text-[#22C55E] animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#F8FAF9] py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-3xl mx-auto">
+        {/* Botón Volver */}
+        <button 
+          onClick={() => navigate(-1)}
+          className="flex items-center gap-2 text-[#64748B] hover:text-[#1F2937] font-inter mb-6 transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          Volver a la lista
+        </button>
+
         {/* Encabezado */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-[#1F2937] font-poppins">
-            Registrar Organización
+            Actualizar Organización
           </h1>
           <p className="mt-2 text-[#64748B] font-inter">
-            Crear un nuevo perfil institucional en el sistema.
+            Modifica la información de la institución seleccionada.
           </p>
         </div>
 
@@ -88,7 +129,6 @@ const RegisterOrganization = () => {
         <div className="bg-white rounded-xl shadow-sm border border-[#E2E8F0] overflow-hidden">
           <form onSubmit={handleSubmit} className="p-8 space-y-6">
             
-            {/* Mensajes de Feedback */}
             {status.message && (
               <div className={`p-4 rounded-lg font-inter text-sm ${
                 status.type === 'success' 
@@ -100,7 +140,6 @@ const RegisterOrganization = () => {
             )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Nombre - Requerido */}
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-[#1F2937] font-poppins mb-1">
                   Nombre de la Organización *
@@ -111,12 +150,10 @@ const RegisterOrganization = () => {
                   required
                   value={formData.nombre}
                   onChange={handleChange}
-                  placeholder="Ej. Asociación de Voluntarios"
-                  className="w-full px-4 py-2 border border-[#E2E8F0] rounded-lg focus:ring-2 focus:ring-[#22C55E] focus:border-transparent outline-none font-inter text-[#1F2937] transition-all"
+                  className="w-full px-4 py-2 border border-[#E2E8F0] rounded-lg focus:ring-2 focus:ring-[#7C3AED] focus:border-transparent outline-none font-inter text-[#1F2937] transition-all"
                 />
               </div>
 
-              {/* Tipo */}
               <div>
                 <label className="block text-sm font-medium text-[#1F2937] font-poppins mb-1">
                   Tipo
@@ -134,7 +171,6 @@ const RegisterOrganization = () => {
                 </select>
               </div>
 
-              {/* Email */}
               <div>
                 <label className="block text-sm font-medium text-[#1F2937] font-poppins mb-1">
                   Correo Electrónico
@@ -144,7 +180,6 @@ const RegisterOrganization = () => {
                   name="email"
                   value={formData.email}
                   onChange={handleChange}
-                  placeholder="contacto@organizacion.org"
                   className="w-full px-4 py-2 border border-[#E2E8F0] rounded-lg focus:ring-2 focus:ring-[#38BDF8] focus:border-transparent outline-none font-inter text-[#1F2937] transition-all"
                 />
               </div>
@@ -159,7 +194,6 @@ const RegisterOrganization = () => {
                   name="telefono"
                   value={formData.telefono}
                   onChange={handleChange}
-                  placeholder="+503 2222-0000"
                   className="w-full px-4 py-2 border border-[#E2E8F0] rounded-lg focus:ring-2 focus:ring-[#38BDF8] focus:border-transparent outline-none font-inter text-[#1F2937] transition-all"
                 />
               </div>
@@ -174,12 +208,10 @@ const RegisterOrganization = () => {
                   name="direccion"
                   value={formData.direccion}
                   onChange={handleChange}
-                  placeholder="Calle Principal #123"
                   className="w-full px-4 py-2 border border-[#E2E8F0] rounded-lg focus:ring-2 focus:ring-[#38BDF8] focus:border-transparent outline-none font-inter text-[#1F2937] transition-all"
                 />
               </div>
 
-              {/* Descripción */}
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-[#1F2937] font-poppins mb-1">
                   Descripción
@@ -189,46 +221,39 @@ const RegisterOrganization = () => {
                   rows="4"
                   value={formData.descripcion}
                   onChange={handleChange}
-                  placeholder="Describe la misión y visión de la organización..."
                   className="w-full px-4 py-2 border border-[#E2E8F0] rounded-lg focus:ring-2 focus:ring-[#38BDF8] focus:border-transparent outline-none font-inter text-[#1F2937] transition-all resize-none"
                 ></textarea>
               </div>
             </div>
 
-            {/* Acciones */}
             <div className="pt-4 flex items-center justify-end space-x-4">
               <button
                 type="button"
+                onClick={() => navigate(-1)}
                 className="px-6 py-2 border border-[#E2E8F0] text-[#64748B] rounded-lg hover:bg-gray-50 font-poppins font-medium transition-colors"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
-                disabled={loading}
-                className={`px-8 py-2 bg-[#22C55E] hover:bg-[#16A34A] text-[#FFFFFF] rounded-lg font-poppins font-semibold transition-all shadow-md active:transform active:scale-95 flex items-center ${
-                  loading ? 'opacity-70 cursor-not-allowed' : ''
+                disabled={updating}
+                className={`px-8 py-2 bg-[#7C3AED] hover:opacity-90 text-[#FFFFFF] rounded-lg font-poppins font-semibold transition-all shadow-md active:transform active:scale-95 flex items-center gap-2 ${
+                  updating ? 'opacity-70 cursor-not-allowed' : ''
                 }`}
               >
-                {loading ? (
-                  <>
-                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    Procesando...
-                  </>
+                {updating ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
                 ) : (
-                  'Registrar Organización'
+                  <Save className="w-5 h-5" />
                 )}
+                {updating ? 'Guardando cambios...' : 'Guardar Cambios'}
               </button>
             </div>
           </form>
         </div>
-        
       </div>
     </div>
   );
 };
 
-export default RegisterOrganization;
+export default ActualizacionOrganizacion;
