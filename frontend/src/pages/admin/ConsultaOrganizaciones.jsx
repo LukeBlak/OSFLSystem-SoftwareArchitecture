@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Plus, Search, Filter, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import InstitutionCard from '../../components/InstitutionCard.jsx';
+import { apiClient } from '../../services/apiClient';
 
 const OrganizationsListPage = () => {
   const [organizations, setOrganizations] = useState([]);
@@ -26,22 +27,20 @@ const OrganizationsListPage = () => {
       const queryParams = new URLSearchParams({
         page: filters.page,
         limit: filters.limit,
-        search: filters.search,
-        tipo: filters.tipo,
-        estado: 'activo' // Por defecto mostramos activos
+        estado: 'activa' // Enum válido en backend
       }).toString();
 
-      const response = await fetch(`/api/organizations?${queryParams}`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
+      if (filters.search?.trim()) {
+        queryParams.set('search', filters.search.trim());
+      }
 
-      if (!response.ok) throw new Error('Error al obtener las organizaciones');
+      if (filters.tipo) {
+        queryParams.set('tipo', filters.tipo);
+      }
 
-      const result = await response.json();
-      setOrganizations(result.data.organizations);
-      setPagination(result.data.pagination);
+      const result = await apiClient.get(`/organizations?${queryParams}`);
+      setOrganizations(result?.data?.organizations || []);
+      setPagination(result?.data?.pagination || { total: 0, totalPages: 1, page: filters.page });
     } catch (err) {
       setError(err.message);
     } finally {
@@ -113,10 +112,14 @@ const OrganizationsListPage = () => {
                 onChange={(e) => setFilters({ ...filters, tipo: e.target.value, page: 1 })}
               >
                 <option value="">Todos los tipos</option>
-                <option value="ONG">ONG</option>
-                <option value="Fundación">Fundación</option>
-                <option value="Gubernamental">Gubernamental</option>
-                <option value="Privada">Privada</option>
+                <option value="asociacion">Asociación</option>
+                <option value="fundacion">Fundación</option>
+                <option value="ong">ONG</option>
+                <option value="cooperativa">Cooperativa</option>
+                <option value="grupo_comunitario">Grupo comunitario</option>
+                <option value="religiosa">Religiosa</option>
+                <option value="estudiantil">Estudiantil</option>
+                <option value="otro">Otro</option>
               </select>
             </div>
             

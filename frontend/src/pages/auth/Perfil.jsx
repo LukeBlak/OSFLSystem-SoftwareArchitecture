@@ -37,7 +37,7 @@ function Perfil() {
     try {
       const currentUser = authService.getUser();
       if (!currentUser) {
-        navigate('/login');
+        navigate('/login', { replace: true });
         return;
       }
       const response = await fetch(`${API_URL}/profile`, {
@@ -163,7 +163,7 @@ function Perfil() {
     try {
       if (!authService.getToken()) {
         authService.clearSession();
-        navigate('/login');
+        navigate('/login', { replace: true });
         throw new Error('Tu sesión no es válida. Inicia sesión nuevamente.');
       }
 
@@ -190,7 +190,7 @@ function Perfil() {
           }
 
           authService.clearSession();
-          navigate('/login');
+          navigate('/login', { replace: true });
           throw new Error('Tu sesión expiró. Inicia sesión nuevamente para cambiar tu contraseña.');
         }
 
@@ -233,11 +233,11 @@ function Perfil() {
   const handleLogout = async () => {
     try {
       await authService.logout();
-      navigate('/login');
+      navigate('/login', { replace: true });
     } catch (err) {
       console.error('Logout error:', err);
       authService.clearSession();
-      navigate('/login');
+      navigate('/login', { replace: true });
     }
   };
 
@@ -265,7 +265,7 @@ function Perfil() {
         <div className="bg-white rounded-2xl shadow-xl p-8 text-center max-w-sm w-full">
           <p className="text-red-600 font-medium mb-4"> {error}</p>
           <button
-            onClick={() => navigate('/login')}
+            onClick={() => navigate('/login', { replace: true })}
             className="bg-teal-600 hover:bg-teal-700 text-white font-semibold py-2 px-6 rounded-lg transition-colors"
           >
             Volver al login
