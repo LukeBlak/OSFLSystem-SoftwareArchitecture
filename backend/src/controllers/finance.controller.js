@@ -98,6 +98,28 @@ export const getBalance = async (req, res, next) => {
   }
 };
 
+export const getMyBalance = async (req, res, next) => {
+  try {
+    const { fechaCorte } = req.query;
+    const balance = await financeService.getBalance(
+      null,
+      req.user,
+      req.supabase,
+      { fechaCorte }
+    );
+
+    return res.status(StatusCodes.OK).json(
+      new ApiResponse(
+        StatusCodes.OK,
+        { balance },
+        'Saldo obtenido exitosamente'
+      )
+    );
+  } catch (error) {
+    next(error);
+  }
+};
+
 /**
  * -----------------------------------------------------------------------------
  * LISTAR TRANSACCIONES
@@ -157,6 +179,7 @@ export default {
   registerIncome,
   registerExpense,
   getBalance,
+  getMyBalance,
   listTransactions,
   getFinancialSummary,
 };

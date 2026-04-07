@@ -115,7 +115,8 @@ export const registerIncomeSchema = z.object({
    */
   organizacionId: z
     .string()
-    .uuid('El ID de organización debe ser un UUID válido'),
+    .uuid('El ID de organización debe ser un UUID válido')
+    .optional(),
   
   /**
    * Método de pago
@@ -192,7 +193,8 @@ export const registerExpenseSchema = z.object({
    */
   organizacionId: z
     .string()
-    .uuid('El ID de organización debe ser un UUID válido'),
+    .uuid('El ID de organización debe ser un UUID válido')
+    .optional(),
   
   /**
    * Método de pago

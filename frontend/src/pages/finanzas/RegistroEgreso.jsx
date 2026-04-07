@@ -5,6 +5,22 @@ import { getBalance, registerExpense } from '../../services/financeService';
 import { getProjects } from '../../services/projectService';
 import authService from '../../services/authService';
 
+const resolveOrganizationId = (user) => (
+  user?.organizationId
+  || user?.organizacionId
+  || user?.organization_id
+  || user?.organizacion_id
+  || user?.profile?.organizationId
+  || user?.profile?.organizacionId
+  || user?.profile?.organization_id
+  || user?.profile?.organizacion_id
+  || user?.user_metadata?.organizationId
+  || user?.user_metadata?.organizacionId
+  || user?.user_metadata?.organization_id
+  || user?.user_metadata?.organizacion_id
+  || ''
+);
+
 const categories = [
   { value: 'materiales', label: 'Materiales' },
   { value: 'transporte', label: 'Transporte' },
@@ -19,7 +35,7 @@ const categories = [
 const RegistroEgreso = () => {
   const navigate = useNavigate();
   const currentUser = authService.getUser();
-  const [organizationId, setOrganizationId] = useState(currentUser?.organizationId || currentUser?.organizacionId || '');
+  const [organizationId, setOrganizationId] = useState(resolveOrganizationId(currentUser));
 
   const [formData, setFormData] = useState({
     monto: '',
@@ -32,7 +48,7 @@ const RegistroEgreso = () => {
     comprobanteUrl: '',
     notas: '',
   });
-  const [currentBalance, setCurrentBalance] = useState(0);
+  const [currentBalance, setCurrentBalance] = useState(null);
   const [projects, setProjects] = useState([]);
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
@@ -44,7 +60,7 @@ const RegistroEgreso = () => {
       if (organizationId) return;
 
       const sessionUser = await authService.checkSession();
-      const fallbackOrganizationId = sessionUser?.organizationId || sessionUser?.organizacionId || '';
+      const fallbackOrganizationId = resolveOrganizationId(sessionUser);
       if (fallbackOrganizationId) {
         setOrganizationId(fallbackOrganizationId);
       }
@@ -57,12 +73,27 @@ const RegistroEgreso = () => {
   const loadInitialData = async () => {
     setLoadingData(true);
     try {
+      let resolvedOrganizationId = organizationId;
+
+      if (!resolvedOrganizationId) {
+        const sessionUser = await authService.checkSession();
+        resolvedOrganizationId = resolveOrganizationId(sessionUser);
+
+        if (resolvedOrganizationId) {
+          setOrganizationId(resolvedOrganizationId);
+        }
+      }
+
       const [balanceResponse, projectsResponse] = await Promise.all([
-        organizationId ? getBalance(organizationId) : Promise.resolve(null),
+        getBalance(resolvedOrganizationId || undefined),
         getProjects({ limit: 100 }),
       ]);
 
-      const balanceValue = balanceResponse?.data?.balance?.saldo ?? balanceResponse?.data?.saldo ?? balanceResponse?.data?.balance ?? 0;
+      const balanceValue = balanceResponse?.data?.balance?.saldo
+        ?? balanceResponse?.data?.balance?.saldoActualOrganizacion
+        ?? balanceResponse?.data?.saldo
+        ?? balanceResponse?.data?.balance
+        ?? 0;
       setCurrentBalance(Number(balanceValue) || 0);
 
       const projectItems = Array.isArray(projectsResponse?.data)
@@ -102,8 +133,6 @@ const RegistroEgreso = () => {
     if (Number(formData.monto) > currentBalance) nextErrors.monto = 'Fondos insuficientes en caja';
     if (!formData.concepto.trim()) nextErrors.concepto = 'El concepto es obligatorio';
     if (!formData.categoria) nextErrors.categoria = 'Seleccione una categoría';
-    if (!organizationId) nextErrors.organizacionId = 'No se pudo identificar la organización del usuario';
-
     setErrors(nextErrors);
     return Object.keys(nextErrors).length === 0;
   };
@@ -120,7 +149,7 @@ const RegistroEgreso = () => {
         monto: Number(formData.monto),
         concepto: formData.concepto.trim(),
         fecha: formData.fecha,
-        organizacionId,
+        organizacionId: organizationId || undefined,
         categoria: formData.categoria,
         metodoPago: formData.metodoPago,
         numeroComprobante: formData.numeroComprobante || undefined,
@@ -156,7 +185,7 @@ const RegistroEgreso = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-red-100 text-sm mb-1">Saldo Actual en Caja</p>
-              <p className="text-4xl font-bold">{formatCurrency(currentBalance)}</p>
+              <p className="text-4xl font-bold">{currentBalance === null ? 'Sin sesión' : formatCurrency(currentBalance)}</p>
             </div>
             <div className="text-6xl opacity-20">💰</div>
           </div>
@@ -167,7 +196,7 @@ const RegistroEgreso = () => {
             <label className="block text-text-primary font-semibold mb-2">Monto del Egreso *</label>
             <input type="number" name="monto" value={formData.monto} onChange={handleChange} className={`input-field ${errors.monto ? 'border-red-500' : ''}`} placeholder="0.00" min="0.01" step="0.01" />
             {errors.monto && <p className="mt-1 text-sm text-red-500">{errors.monto}</p>}
-            <p className="mt-1 text-xs text-text-secondary">Saldo disponible: {formatCurrency(currentBalance)}</p>
+            <p className="mt-1 text-xs text-text-secondary">Saldo disponible: {currentBalance === null ? 'Sin sesión' : formatCurrency(currentBalance)}</p>
           </div>
 
           <div>

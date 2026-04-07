@@ -22,6 +22,170 @@ const BASE_TABLE = 'transaccion_financiera';
 const INCOME_TABLE = 'ingreso';
 const EXPENSE_TABLE = 'egreso';
 
+const normalizeIncomeCategoryForDb = (value) => {
+  const normalized = String(value || '').trim().toLowerCase();
+  const map = {
+    cuota_miembro: 'Cuota_Miembro',
+    donacion: 'Donacion',
+    evento: 'Evento',
+    venta: 'Venta',
+    subvencion: 'Subvencion',
+    transferencia: 'Transferencia',
+    otro: 'Otro',
+  };
+
+  return map[normalized] || value;
+};
+
+const normalizeExpenseCategoryForDb = (value) => {
+  const normalized = String(value || '').trim().toLowerCase();
+  const map = {
+    materiales: 'Materiales',
+    transporte: 'Transporte',
+    alimentacion: 'Alimentacion',
+    publicidad: 'Publicidad',
+    servicios: 'Servicios',
+    impuestos: 'Impuestos',
+    transferencia: 'Transferencia',
+    otro: 'Otro',
+  };
+
+  return map[normalized] || value;
+};
+
+const resolveOrganizationIdForUser = async (user) => {
+  const direct = user?.organizationId
+    || user?.organizacionId
+    || user?.organization_id
+    || user?.organizacion_id
+    || null;
+
+  if (direct) {
+    return direct;
+  }
+
+  if (!user?.id) {
+    return null;
+  }
+
+  const { data: liderOrg, error: liderOrgError } = await supabaseAdmin
+    .from('lider_organizacion')
+    .select('organizacionid')
+    .eq('id', user.id)
+    .limit(1)
+    .maybeSingle();
+
+  if (!liderOrgError && liderOrg?.organizacionid) {
+    return liderOrg.organizacionid;
+  }
+
+  const { data: comiteLider, error: comiteLiderError } = await supabaseAdmin
+    .from('comite')
+    .select('organizacionid')
+    .eq('lidercomiteid', user.id)
+    .limit(1)
+    .maybeSingle();
+
+  if (!comiteLiderError && comiteLider?.organizacionid) {
+    return comiteLider.organizacionid;
+  }
+
+  const { data: memberCommittee, error: memberCommitteeError } = await supabaseAdmin
+    .from('miembro_comite')
+    .select('comiteid')
+    .eq('miembroid', user.id)
+    .limit(1)
+    .maybeSingle();
+
+  if (!memberCommitteeError && memberCommittee?.comiteid) {
+    const { data: committee, error: committeeError } = await supabaseAdmin
+      .from('comite')
+      .select('organizacionid')
+      .eq('id', memberCommittee.comiteid)
+      .limit(1)
+      .maybeSingle();
+
+    if (!committeeError && committee?.organizacionid) {
+      return committee.organizacionid;
+    }
+  }
+
+  return null;
+};
+
+const resolveOrganizationIdForActorId = async (actorId) => {
+  if (!actorId) {
+    return null;
+  }
+
+  const { data: publicUser, error: publicUserError } = await supabaseAdmin
+    .from('usuario')
+    .select('*')
+    .eq('id', actorId)
+    .limit(1)
+    .maybeSingle();
+
+  if (!publicUserError && publicUser) {
+    const publicOrgId = (
+      publicUser.organizationId
+      || publicUser.organizacionId
+      || publicUser.organization_id
+      || publicUser.organizacion_id
+      || publicUser.organizacionid
+      || publicUser.organizationid
+      || null
+    );
+
+    if (publicOrgId) {
+      return publicOrgId;
+    }
+  }
+
+  const { data: liderOrg, error: liderOrgError } = await supabaseAdmin
+    .from('lider_organizacion')
+    .select('organizacionid')
+    .eq('id', actorId)
+    .limit(1)
+    .maybeSingle();
+
+  if (!liderOrgError && liderOrg?.organizacionid) {
+    return liderOrg.organizacionid;
+  }
+
+  const { data: comiteLider, error: comiteLiderError } = await supabaseAdmin
+    .from('comite')
+    .select('organizacionid')
+    .eq('lidercomiteid', actorId)
+    .limit(1)
+    .maybeSingle();
+
+  if (!comiteLiderError && comiteLider?.organizacionid) {
+    return comiteLider.organizacionid;
+  }
+
+  const { data: memberCommittee, error: memberCommitteeError } = await supabaseAdmin
+    .from('miembro_comite')
+    .select('comiteid')
+    .eq('miembroid', actorId)
+    .limit(1)
+    .maybeSingle();
+
+  if (!memberCommitteeError && memberCommittee?.comiteid) {
+    const { data: committee, error: committeeError } = await supabaseAdmin
+      .from('comite')
+      .select('organizacionid')
+      .eq('id', memberCommittee.comiteid)
+      .limit(1)
+      .maybeSingle();
+
+    if (!committeeError && committee?.organizacionid) {
+      return committee.organizacionid;
+    }
+  }
+
+  return null;
+};
+
 const toIsoDateTime = (value) => {
   if (!value) return new Date().toISOString();
   if (value instanceof Date) return value.toISOString();
@@ -32,18 +196,41 @@ const toIsoDateTime = (value) => {
   return normalized;
 };
 
+const ensureCreatedBy = async (tableName, recordId, userId) => {
+  const { error } = await supabaseAdmin
+    .from(tableName)
+    .update({ creado_por: userId })
+    .eq('id', recordId)
+    .is('creado_por', null);
+
+  if (error) {
+    logger.warn('No se pudo completar backfill de creado_por', {
+      tableName,
+      recordId,
+      userId,
+      error,
+    });
+  }
+};
+
 const normalizeTransactionRow = (baseRow, detailRow) => {
   if (!baseRow) return null;
 
+  const normalizedType = String(baseRow.tipo || '').trim().toLowerCase();
+  const detailOrganizationId = detailRow?.organizacionid
+    || detailRow?.proyecto?.organizacionid
+    || detailRow?.comite?.organizacionid
+    || null;
+
   return {
     id: baseRow.id,
-    type: baseRow.tipo,
+    type: normalizedType,
     description: baseRow.concepto || detailRow?.descripcion || '',
     amount: Number(baseRow.monto || 0),
     date: baseRow.fecha || baseRow.fecha_creacion || null,
     category: detailRow?.categoria || baseRow.categoria || 'Sin categoría',
     project: detailRow?.proyectoid || null,
-    organizationId: detailRow?.organizacionid || null,
+    organizationId: detailOrganizationId,
     receipt: detailRow?.comprobante || null,
     source: detailRow?.fuente || null,
     registeredBy: detailRow?.registradopor || null,
@@ -57,13 +244,13 @@ const normalizeTransactionRow = (baseRow, detailRow) => {
 const fetchDetailRows = async (tableName, organizationId) => {
   const selectFields = tableName === INCOME_TABLE
     ? 'id, categoria, fuente, comprobante, descripcion, proyectoid, organizacionid, registradopor, creado_por, modificado_por, fecha_creacion, fecha_edicion'
-    : 'id, categoria, proyectoid, comiteid, comprobante, descripcion, autorizadopor, solicitadopor, creado_por, modificado_por, fecha_creacion, fecha_edicion';
+    : 'id, categoria, proyectoid, comiteid, comprobante, descripcion, autorizadopor, solicitadopor, creado_por, modificado_por, fecha_creacion, fecha_edicion, proyecto:proyectoid(organizacionid), comite:comiteid(organizacionid)';
 
   let query = supabaseAdmin
     .from(tableName)
     .select(selectFields);
 
-  if (organizationId) {
+  if (organizationId && tableName === INCOME_TABLE) {
     query = query.eq('organizacionid', organizationId);
   }
 
@@ -72,7 +259,45 @@ const fetchDetailRows = async (tableName, organizationId) => {
     throw error;
   }
 
-  return Array.isArray(data) ? data : [];
+  const rows = Array.isArray(data) ? data : [];
+
+  if (!organizationId || tableName === INCOME_TABLE) {
+    return rows;
+  }
+
+  const actorOrganizationCache = new Map();
+  const filteredRows = [];
+
+  for (const row of rows) {
+    const projectOrganizationId = row?.proyecto?.organizacionid || null;
+    const committeeOrganizationId = row?.comite?.organizacionid || null;
+
+    if (projectOrganizationId === organizationId || committeeOrganizationId === organizationId) {
+      filteredRows.push(row);
+      continue;
+    }
+
+    const actorIds = [row?.autorizadopor, row?.solicitadopor, row?.creado_por].filter(Boolean);
+    let belongsToOrganization = false;
+
+    for (const actorId of actorIds) {
+      if (!actorOrganizationCache.has(actorId)) {
+        const actorOrganizationId = await resolveOrganizationIdForActorId(actorId);
+        actorOrganizationCache.set(actorId, actorOrganizationId);
+      }
+
+      if (actorOrganizationCache.get(actorId) === organizationId) {
+        belongsToOrganization = true;
+        break;
+      }
+    }
+
+    if (belongsToOrganization) {
+      filteredRows.push(row);
+    }
+  }
+
+  return filteredRows;
 };
 
 const fetchBaseRowsByIds = async (ids) => {
@@ -134,10 +359,18 @@ const loadFinancialEntries = async ({ organizationId = null, tipo = null, catego
  */
 export const registerIncome = async (incomeData, currentUser, supabaseClient) => {
   try {
+    const resolvedOrganizationId = incomeData?.organizacionId || await resolveOrganizationIdForUser(currentUser);
+    if (!resolvedOrganizationId) {
+      throw ApiError.badRequest('No se pudo identificar la organización del usuario');
+    }
+
     // =========================================================================
     // 1. VALIDAR DATOS DE ENTRADA
     // =========================================================================
-    const validData = validateRegisterIncome(incomeData);
+    const validData = validateRegisterIncome({
+      ...incomeData,
+      organizacionId: resolvedOrganizationId,
+    });
 
     // =========================================================================
     // 2. VERIFICAR PERMISOS DEL USUARIO
@@ -158,7 +391,7 @@ export const registerIncome = async (incomeData, currentUser, supabaseClient) =>
     // =========================================================================
     const { data: organizacion, error: orgError } = await supabaseAdmin
       .from('organizacion')
-      .select('id, nombre, estado, saldoactual')
+      .select('id, nombre, saldoactual')
       .eq('id', validData.organizacionId)
       .maybeSingle();
 
@@ -170,7 +403,8 @@ export const registerIncome = async (incomeData, currentUser, supabaseClient) =>
     // 4. VERIFICAR QUE EL USUARIO TIENE ACCESO A LA ORGANIZACIÓN
     // =========================================================================
     if (currentUser.role === USER_ROLES.LIDER_ORGANIZACION) {
-      if (currentUser.organizationId !== validData.organizacionId) {
+      const userOrganizationId = await resolveOrganizationIdForUser(currentUser);
+      if (userOrganizationId && userOrganizationId !== validData.organizacionId) {
         throw ApiError.forbidden('Solo puedes registrar ingresos para tu organización');
       }
     }
@@ -182,7 +416,7 @@ export const registerIncome = async (incomeData, currentUser, supabaseClient) =>
     const transactionData = {
       monto: validData.monto,
       fecha: toIsoDateTime(validData.fecha),
-      tipo: TRANSACTION_TYPE.INGRESO,
+      tipo: 'Ingreso',
       concepto: validData.concepto,
       creado_por: currentUser.id,
       modificado_por: currentUser.id,
@@ -204,30 +438,56 @@ export const registerIncome = async (incomeData, currentUser, supabaseClient) =>
       throw ApiError.internal('Error al registrar el ingreso');
     }
 
-    const { error: incomeDetailError } = await supabaseAdmin
+    const detailPayload = {
+      id: transaccion.id,
+      categoria: normalizeIncomeCategoryForDb(validData.categoria),
+      fuente: validData.metodoPago,
+      comprobante: validData.comprobanteUrl || validData.numeroComprobante || null,
+      descripcion: validData.concepto,
+      proyectoid: null,
+      organizacionid: validData.organizacionId,
+      registradopor: currentUser.id,
+      creado_por: currentUser.id,
+      modificado_por: currentUser.id,
+      fecha_creacion: now,
+      fecha_edicion: now,
+    };
+
+    let { error: incomeDetailError } = await supabaseAdmin
       .from(INCOME_TABLE)
-      .insert({
-        id: transaccion.id,
-        categoria: validData.categoria,
-        fuente: validData.metodoPago,
-        comprobante: validData.comprobanteUrl || validData.numeroComprobante || null,
-        descripcion: validData.concepto,
-        proyectoid: null,
-        organizacionid: validData.organizacionId,
-        registradopor: currentUser.id,
-        creado_por: currentUser.id,
-        modificado_por: currentUser.id,
-        fecha_creacion: now,
-        fecha_edicion: now,
-      });
+      .insert(detailPayload);
+
+    if (incomeDetailError?.code === '22P02' && String(incomeDetailError?.message || '').includes('categoria_ingreso')) {
+      const fallbackPayload = {
+        ...detailPayload,
+        categoria: null,
+      };
+
+      const fallback = await supabaseAdmin
+        .from(INCOME_TABLE)
+        .insert(fallbackPayload);
+
+      incomeDetailError = fallback.error;
+    }
 
     if (incomeDetailError) {
       logger.error('Error al crear detalle de ingreso', {
         error: incomeDetailError,
         transactionId: transaccion.id,
       });
+
+      await supabaseAdmin
+        .from(BASE_TABLE)
+        .delete()
+        .eq('id', transaccion.id);
+
       throw ApiError.internal('Error al registrar el ingreso');
     }
+
+    await Promise.all([
+      ensureCreatedBy(BASE_TABLE, transaccion.id, currentUser.id),
+      ensureCreatedBy(INCOME_TABLE, transaccion.id, currentUser.id),
+    ]);
 
     // =========================================================================
     // 7. ACTUALIZAR SALDO DE LA ORGANIZACIÓN
@@ -289,10 +549,18 @@ export const registerIncome = async (incomeData, currentUser, supabaseClient) =>
  */
 export const registerExpense = async (expenseData, currentUser, supabaseClient) => {
   try {
+    const resolvedOrganizationId = expenseData?.organizacionId || await resolveOrganizationIdForUser(currentUser);
+    if (!resolvedOrganizationId) {
+      throw ApiError.badRequest('No se pudo identificar la organización del usuario');
+    }
+
     // =========================================================================
     // 1. VALIDAR DATOS DE ENTRADA
     // =========================================================================
-    const validData = validateRegisterExpense(expenseData);
+    const validData = validateRegisterExpense({
+      ...expenseData,
+      organizacionId: resolvedOrganizationId,
+    });
 
     // =========================================================================
     // 2. VERIFICAR PERMISOS DEL USUARIO
@@ -313,7 +581,7 @@ export const registerExpense = async (expenseData, currentUser, supabaseClient) 
     // =========================================================================
     const { data: organizacion, error: orgError } = await supabaseAdmin
       .from('organizacion')
-      .select('id, nombre, estado, saldoactual')
+      .select('id, nombre, saldoactual')
       .eq('id', validData.organizacionId)
       .maybeSingle();
 
@@ -344,7 +612,8 @@ export const registerExpense = async (expenseData, currentUser, supabaseClient) 
     // 5. VERIFICAR ACCESO A LA ORGANIZACIÓN
     // =========================================================================
     if (currentUser.role === USER_ROLES.LIDER_ORGANIZACION) {
-      if (currentUser.organizationId !== validData.organizacionId) {
+      const userOrganizationId = await resolveOrganizationIdForUser(currentUser);
+      if (userOrganizationId && userOrganizationId !== validData.organizacionId) {
         throw ApiError.forbidden('Solo puedes registrar egresos para tu organización');
       }
     }
@@ -356,7 +625,7 @@ export const registerExpense = async (expenseData, currentUser, supabaseClient) 
     const transactionData = {
       monto: validData.monto,
       fecha: toIsoDateTime(validData.fecha),
-      tipo: TRANSACTION_TYPE.EGRESO,
+      tipo: 'Egreso',
       concepto: validData.concepto,
       creado_por: currentUser.id,
       modificado_por: currentUser.id,
@@ -378,37 +647,65 @@ export const registerExpense = async (expenseData, currentUser, supabaseClient) 
       throw ApiError.internal('Error al registrar el egreso');
     }
 
-    const { error: expenseDetailError } = await supabaseAdmin
+    const expenseDetailPayload = {
+      id: transaccion.id,
+      categoria: normalizeExpenseCategoryForDb(validData.categoria),
+      proyectoid: validData.proyectoId || null,
+      comiteid: null,
+      comprobante: validData.comprobanteUrl || validData.numeroComprobante || null,
+      descripcion: validData.concepto,
+      autorizadopor: currentUser.role === USER_ROLES.LIDER_ORGANIZACION ? currentUser.id : null,
+      solicitadopor: currentUser.role === USER_ROLES.LIDER_COMITE ? currentUser.id : null,
+      creado_por: currentUser.id,
+      modificado_por: currentUser.id,
+      fecha_creacion: now,
+      fecha_edicion: now,
+    };
+
+    let { error: expenseDetailError } = await supabaseAdmin
       .from(EXPENSE_TABLE)
-      .insert({
-        id: transaccion.id,
-        categoria: validData.categoria,
-        proyectoid: validData.proyectoId || null,
-        comiteid: null,
-        comprobante: validData.comprobanteUrl || validData.numeroComprobante || null,
-        descripcion: validData.concepto,
-        autorizadopor: currentUser.role === USER_ROLES.LIDER_ORGANIZACION ? currentUser.id : null,
-        solicitadopor: currentUser.role === USER_ROLES.LIDER_COMITE ? currentUser.id : null,
-        creado_por: currentUser.id,
-        modificado_por: currentUser.id,
-        fecha_creacion: now,
-        fecha_edicion: now,
-      });
+      .insert(expenseDetailPayload);
+
+    if (expenseDetailError?.code === '22P02' && String(expenseDetailError?.message || '').includes('categoria_egreso')) {
+      const fallbackPayload = {
+        ...expenseDetailPayload,
+        categoria: null,
+      };
+
+      const fallback = await supabaseAdmin
+        .from(EXPENSE_TABLE)
+        .insert(fallbackPayload);
+
+      expenseDetailError = fallback.error;
+    }
 
     if (expenseDetailError) {
       logger.error('Error al crear detalle de egreso', {
         error: expenseDetailError,
         transactionId: transaccion.id,
       });
+
+      await supabaseAdmin
+        .from(BASE_TABLE)
+        .delete()
+        .eq('id', transaccion.id);
+
       throw ApiError.internal('Error al registrar el egreso');
     }
+
+    await Promise.all([
+      ensureCreatedBy(BASE_TABLE, transaccion.id, currentUser.id),
+      ensureCreatedBy(EXPENSE_TABLE, transaccion.id, currentUser.id),
+    ]);
 
     // =========================================================================
     // 8. ACTUALIZAR SALDO DE LA ORGANIZACIÓN
     // =========================================================================
     const nuevoSaldo = saldoActual - validData.monto;
 
-    const { error: updateError } = await supabaseClient
+    const dbClient = supabaseClient || supabaseAdmin;
+
+    const { error: updateError } = await dbClient
       .from('organizacion')
       .update({
         saldoactual: nuevoSaldo,
@@ -463,6 +760,11 @@ export const registerExpense = async (expenseData, currentUser, supabaseClient) 
 export const getBalance = async (organizacionId, currentUser, supabaseClient, options = {}) => {
   try {
     const { fechaCorte = null } = options;
+    const resolvedOrganizationId = organizacionId || await resolveOrganizationIdForUser(currentUser);
+
+    if (!resolvedOrganizationId) {
+      throw ApiError.badRequest('No se pudo identificar la organización del usuario');
+    }
 
     // =========================================================================
     // 1. VERIFICAR PERMISOS
@@ -482,7 +784,8 @@ export const getBalance = async (organizacionId, currentUser, supabaseClient, op
     // 2. VERIFICAR ACCESO A LA ORGANIZACIÓN
     // =========================================================================
     if (currentUser.role === USER_ROLES.LIDER_ORGANIZACION) {
-      if (currentUser.organizationId !== organizacionId) {
+      const userOrganizationId = await resolveOrganizationIdForUser(currentUser);
+      if (userOrganizationId && userOrganizationId !== resolvedOrganizationId) {
         throw ApiError.forbidden('Solo puedes consultar el saldo de tu organización');
       }
     }
@@ -492,14 +795,14 @@ export const getBalance = async (organizacionId, currentUser, supabaseClient, op
     // =========================================================================
     const { data: organizacion, error: organizationError } = await supabaseAdmin
       .from('organizacion')
-      .select('id, nombre, estado, saldoactual')
-      .eq('id', organizacionId)
+      .select('id, nombre, saldoactual')
+      .eq('id', resolvedOrganizationId)
       .maybeSingle();
 
     if (organizationError) {
       logger.error('Error al consultar organización para balance', {
         error: organizationError,
-        organizacionId,
+        organizacionId: resolvedOrganizationId,
       });
       throw ApiError.internal('Error al consultar la organización');
     }
@@ -511,7 +814,7 @@ export const getBalance = async (organizacionId, currentUser, supabaseClient, op
     // =========================================================================
     // 4. OBTENER SALDO
     // =========================================================================
-    const entries = await loadFinancialEntries({ organizationId: organizacionId });
+    const entries = await loadFinancialEntries({ organizationId: resolvedOrganizationId });
     const scopedEntries = fechaCorte
       ? entries.filter((entry) => {
           if (!entry.date) return false;
@@ -533,7 +836,7 @@ export const getBalance = async (organizacionId, currentUser, supabaseClient, op
     // 5. RETORNAR RESULTADO
     // =========================================================================
     return {
-      organizacionId,
+      organizacionId: resolvedOrganizationId,
       organizacion: organizacion.nombre,
       saldo,
       ingresos,
@@ -576,7 +879,7 @@ export const listTransactions = async (filters, currentUser) => {
     const offset = Math.max(0, (Number.isFinite(page) ? page : 1) - 1) * Math.max(1, Number.isFinite(limit) ? limit : 10);
 
     const organizationId = currentUser.role === USER_ROLES.LIDER_ORGANIZACION
-      ? currentUser.organizationId
+      ? await resolveOrganizationIdForUser(currentUser)
       : filters.organizacionId || null;
 
     const entries = await loadFinancialEntries({

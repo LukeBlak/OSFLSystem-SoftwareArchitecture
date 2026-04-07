@@ -65,6 +65,16 @@ router.post(
 );
 
 /**
+ * GET /api/finance/balance - Consultar disponibilidad en caja por usuario autenticado
+ */
+router.get(
+  '/balance',
+  canViewFinance,
+  validate(getBalanceQuerySchema, { source: 'query' }),
+  financeController.getMyBalance
+);
+
+/**
  * GET /api/finance/balance/:organizacionId - Consultar disponibilidad en caja (CU-22)
  */
 router.get(

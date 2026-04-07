@@ -110,7 +110,7 @@ const resolveOrganizationId = async (user) => {
 
   const { data: publicUser, error: publicUserError } = await supabaseAdmin
     .from('usuario')
-    .select('organizationId, organizacionId, organization_id, organizacion_id, organizacionid, organizationid')
+    .select('*')
     .eq('id', user.id)
     .limit(1)
     .maybeSingle();
@@ -129,21 +129,44 @@ const resolveOrganizationId = async (user) => {
 
   const { data: liderOrganizacion, error: liderOrgError } = await supabaseAdmin
     .from('lider_organizacion')
-    .select('organizacionId, organizationId, organizacion_id, organization_id, organizacionid, organizationid')
+    .select('organizacionid')
     .eq('id', user.id)
     .limit(1)
     .maybeSingle();
 
   if (!liderOrgError && liderOrganizacion) {
-    return (
-      liderOrganizacion.organizacionId
-      || liderOrganizacion.organizationId
-      || liderOrganizacion.organizacion_id
-      || liderOrganizacion.organization_id
-      || liderOrganizacion.organizacionid
-      || liderOrganizacion.organizationid
-      || null
-    );
+    return liderOrganizacion.organizacionid || null;
+  }
+
+  const { data: comiteLider, error: comiteLiderError } = await supabaseAdmin
+    .from('comite')
+    .select('organizacionid')
+    .eq('lidercomiteid', user.id)
+    .limit(1)
+    .maybeSingle();
+
+  if (!comiteLiderError && comiteLider?.organizacionid) {
+    return comiteLider.organizacionid;
+  }
+
+  const { data: miembroComite, error: miembroComiteError } = await supabaseAdmin
+    .from('miembro_comite')
+    .select('comiteid')
+    .eq('miembroid', user.id)
+    .limit(1)
+    .maybeSingle();
+
+  if (!miembroComiteError && miembroComite?.comiteid) {
+    const { data: committee, error: committeeError } = await supabaseAdmin
+      .from('comite')
+      .select('organizacionid')
+      .eq('id', miembroComite.comiteid)
+      .limit(1)
+      .maybeSingle();
+
+    if (!committeeError && committee?.organizacionid) {
+      return committee.organizacionid;
+    }
   }
 
   return null;

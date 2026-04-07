@@ -5,12 +5,28 @@ import { Wallet, TrendingUp, TrendingDown, DollarSign, Calendar, Download, Refre
 import { getBalance, listTransactions } from '../../services/financeService';
 import authService from '../../services/authService';
 
+const resolveOrganizationId = (user) => (
+  user?.organizationId
+  || user?.organizacionId
+  || user?.organization_id
+  || user?.organizacion_id
+  || user?.profile?.organizationId
+  || user?.profile?.organizacionId
+  || user?.profile?.organization_id
+  || user?.profile?.organizacion_id
+  || user?.user_metadata?.organizationId
+  || user?.user_metadata?.organizacionId
+  || user?.user_metadata?.organization_id
+  || user?.user_metadata?.organizacion_id
+  || ''
+);
+
 const ConsultarCaja = () => {
   const navigate = useNavigate();
   const currentUser = authService.getUser();
-  const [organizationId, setOrganizationId] = useState(currentUser?.organizationId || currentUser?.organizacionId || '');
+  const [organizationId, setOrganizationId] = useState(resolveOrganizationId(currentUser));
 
-  const [balance, setBalance] = useState(0);
+  const [balance, setBalance] = useState(null);
   const [totalIncome, setTotalIncome] = useState(0);
   const [totalExpenses, setTotalExpenses] = useState(0);
   const [recentTransactions, setRecentTransactions] = useState([]);
@@ -25,7 +41,7 @@ const ConsultarCaja = () => {
       if (organizationId) return;
 
       const sessionUser = await authService.checkSession();
-      const fallbackOrganizationId = sessionUser?.organizationId || sessionUser?.organizacionId || '';
+      const fallbackOrganizationId = resolveOrganizationId(sessionUser);
       if (fallbackOrganizationId) {
         setOrganizationId(fallbackOrganizationId);
       }
@@ -41,9 +57,20 @@ const ConsultarCaja = () => {
     setLoading(true);
     setError('');
     try {
+      let resolvedOrganizationId = organizationId;
+
+      if (!resolvedOrganizationId) {
+        const sessionUser = await authService.checkSession();
+        resolvedOrganizationId = resolveOrganizationId(sessionUser);
+
+        if (resolvedOrganizationId) {
+          setOrganizationId(resolvedOrganizationId);
+        }
+      }
+
       const [balanceResponse, transactionsResponse] = await Promise.all([
-        organizationId ? getBalance(organizationId) : Promise.resolve(null),
-        listTransactions({ organizacionId: organizationId || undefined, limit: 100 }),
+        getBalance(resolvedOrganizationId || undefined),
+        listTransactions({ organizacionId: resolvedOrganizationId || undefined, limit: 100 }),
       ]);
 
       const balanceData = balanceResponse?.data?.balance || balanceResponse?.data || {};
@@ -51,7 +78,7 @@ const ConsultarCaja = () => {
       const ingresos = Number(balanceData.ingresos ?? 0);
       const egresos = Number(balanceData.egresos ?? 0);
 
-      setBalance(saldo || 0);
+      setBalance(Number.isFinite(saldo) ? saldo : 0);
       setTotalIncome(ingresos);
       setTotalExpenses(egresos);
 
@@ -158,7 +185,7 @@ const ConsultarCaja = () => {
           <div className="card p-6 bg-gradient-to-br from-[#0d9488] to-[#0f766e] text-white">
             <div className="flex items-center justify-between mb-4"><div className="w-12 h-12 rounded-lg bg-white/20 flex items-center justify-center"><Wallet size={24} className="text-white" /></div><span className="text-xs font-inter text-teal-100 bg-white/10 px-2 py-1 rounded-full">Tiempo Real</span></div>
             <p className="text-teal-100 text-sm font-inter mb-1">Saldo Actual en Caja</p>
-            <p className="font-poppins font-bold text-4xl mb-2">{formatCurrency(balance)}</p>
+            <p className="font-poppins font-bold text-4xl mb-2">{balance === null ? 'Sin sesión' : formatCurrency(balance)}</p>
             <div className="flex items-center gap-2 text-sm text-teal-100"><PiggyBank size={16} /><span>Disponible para gastos</span></div>
           </div>
 
@@ -185,7 +212,7 @@ const ConsultarCaja = () => {
           <div className="relative pt-1">
             <div className="flex mb-2 items-center justify-between"><span className="text-xs font-semibold inline-block py-1 px-2 uppercase rounded-full text-teal-600 bg-teal-200">Ingresos</span><span className="text-xs font-semibold inline-block text-teal-600">{getPercentage()}%</span></div>
             <div className="overflow-hidden h-4 mb-4 text-xs flex rounded bg-teal-200"><div style={{ width: `${getPercentage()}%` }} className="shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center bg-red-500 transition-all duration-500" /></div>
-            <div className="flex justify-between text-sm text-[#64748b] font-inter"><span>Disponible: {formatCurrency(balance)}</span><span>Ejecutado: {formatCurrency(totalExpenses)}</span></div>
+            <div className="flex justify-between text-sm text-[#64748b] font-inter"><span>Disponible: {balance === null ? 'Sin sesión' : formatCurrency(balance)}</span><span>Ejecutado: {formatCurrency(totalExpenses)}</span></div>
           </div>
         </div>
 

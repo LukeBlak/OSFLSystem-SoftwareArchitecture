@@ -14,7 +14,8 @@ export const getBalance = (organizacionId, params = {}) => {
   });
 
   const query = search.toString();
-  return apiClient.get(`/finance/balance/${organizacionId}${query ? `?${query}` : ''}`);
+  const basePath = organizacionId ? `/finance/balance/${organizacionId}` : '/finance/balance';
+  return apiClient.get(`${basePath}${query ? `?${query}` : ''}`);
 };
 
 export const listTransactions = (params = {}) => {

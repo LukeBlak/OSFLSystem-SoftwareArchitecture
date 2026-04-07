@@ -68,8 +68,6 @@ const RegistroIngreso = () => {
     if (!formData.monto || Number(formData.monto) <= 0) nextErrors.monto = 'El monto debe ser mayor a 0';
     if (!formData.categoria) nextErrors.categoria = 'Seleccione una categoría';
     if (!formData.concepto.trim()) nextErrors.concepto = 'El concepto es obligatorio';
-    if (!organizationId) nextErrors.organizacionId = 'No se pudo identificar la organización del usuario';
-
     setErrors(nextErrors);
     return Object.keys(nextErrors).length === 0;
   };
@@ -87,7 +85,7 @@ const RegistroIngreso = () => {
         concepto: formData.concepto.trim(),
         categoria: formData.categoria,
         fecha: formData.fecha,
-        organizacionId,
+        organizacionId: organizationId || undefined,
         metodoPago: formData.metodoPago,
         numeroComprobante: formData.numeroComprobante || undefined,
         comprobanteUrl: formData.comprobanteUrl || undefined,
