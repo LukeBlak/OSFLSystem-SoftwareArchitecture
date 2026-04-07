@@ -10,6 +10,7 @@ const Navbar = () => {
   const role = authService.getUser()?.role;
   const normalizedRole = String(role || '').toLowerCase();
   const hideManagementMenus = normalizedRole === 'super_admin';
+  const canSeeStructureMenu = ['admin', 'lider_organizacion', 'lider_comite'].includes(normalizedRole);
   const homePath = role === 'super_admin' ? '/admin' : '/';
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showEstructuraMenu, setShowEstructuraMenu] = useState(false);
@@ -65,7 +66,7 @@ const Navbar = () => {
             </button>
 
             {/* Estructura (Dropdown) - RUTAS CORRECTAS DEL SEGUNDO APP */}
-            {!hideManagementMenus && (
+            {!hideManagementMenus && canSeeStructureMenu && (
             <div className="relative">
               <button
                 onClick={() => setShowEstructuraMenu(!showEstructuraMenu)}

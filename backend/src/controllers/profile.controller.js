@@ -115,6 +115,7 @@ export const getProfile = async (req, res, next) => {
             role: profile.role,
             profile: profile.profile,
             organizationId: profile.organizationId,
+            organizationName: profile.organizationName || null,
             isActive: profile.isActive,
             createdAt: profile.createdAt,
             updatedAt: profile.updatedAt,

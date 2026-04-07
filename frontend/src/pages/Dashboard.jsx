@@ -1,8 +1,11 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import authService from '../services/authService';
 import { canAccessRoute } from '../config/accessControl';
+import { getProjects } from '../services/projectService';
+import { getMembers } from '../services/memberService';
+import { getFinancialSummary } from '../services/financeService';
 import { 
   FolderKanban, 
   Clock, 
@@ -17,7 +20,125 @@ import {
 
 const Dashboard = () => {
   const navigate = useNavigate();
-  const role = String(authService.getUser()?.role || '').toLowerCase();
+  const currentUser = authService.getUser();
+  const role = String(currentUser?.role || '').toLowerCase();
+  const [organizationId, setOrganizationId] = useState(
+    currentUser?.organizationId
+      || currentUser?.organizacionId
+      || currentUser?.organization_id
+      || currentUser?.organizacion_id
+      || ''
+  );
+  const [statsValues, setStatsValues] = useState({
+    activeProjects: 0,
+    volunteers: 0,
+    validatedHours: 0,
+    cashBalance: 0,
+  });
+  const [loadingStats, setLoadingStats] = useState(true);
+
+  useEffect(() => {
+    hydrateOrganizationAndLoadStats();
+  }, [organizationId, role]);
+
+  const hydrateOrganizationAndLoadStats = async () => {
+    let nextOrganizationId = organizationId;
+    if (!nextOrganizationId) {
+      const sessionUser = await authService.checkSession();
+      nextOrganizationId = sessionUser?.organizationId
+        || sessionUser?.organizacionId
+        || sessionUser?.organization_id
+        || sessionUser?.organizacion_id
+        || '';
+
+      if (nextOrganizationId && nextOrganizationId !== organizationId) {
+        setOrganizationId(nextOrganizationId);
+      }
+    }
+
+    await loadAssociationStats(nextOrganizationId);
+  };
+
+  const loadAssociationStats = async (resolvedOrganizationId = '') => {
+    setLoadingStats(true);
+
+    const canReadMembers = ['admin', 'super_admin', 'lider_organizacion', 'lider_comite'].includes(role);
+    const canReadFinance = ['admin', 'super_admin', 'lider_organizacion'].includes(role);
+    const needsOrganizationForMembers = ['lider_organizacion', 'lider_comite'].includes(role);
+    const canRequestMembers = canReadMembers && (!needsOrganizationForMembers || Boolean(resolvedOrganizationId));
+
+    try {
+      const [projectsResult, membersResult, financeResult] = await Promise.allSettled([
+        getProjects({ organizacionid: resolvedOrganizationId || undefined, limit: 100 }),
+        canRequestMembers ? getMembers({ organizacionId: resolvedOrganizationId || undefined, limit: 100 }) : Promise.resolve(null),
+        canReadFinance && resolvedOrganizationId ? getFinancialSummary({ organizacionId: resolvedOrganizationId }) : Promise.resolve(null),
+      ]);
+
+      const projectsPayload = projectsResult.status === 'fulfilled'
+        ? projectsResult.value
+        : null;
+      const projectsList = Array.isArray(projectsPayload?.data)
+        ? projectsPayload.data
+        : Array.isArray(projectsPayload?.data?.projects)
+          ? projectsPayload.data.projects
+          : [];
+
+      const activeProjects = projectsList.filter((project) => {
+        const status = String(project.estado || project.status || '').toLowerCase();
+        if (!status) return true;
+        return !['finalizado', 'cancelado', 'cerrado', 'inactivo'].includes(status);
+      }).length;
+
+      const membersPayload = membersResult.status === 'fulfilled'
+        ? membersResult.value
+        : null;
+      const membersList = Array.isArray(membersPayload?.data)
+        ? membersPayload.data
+        : Array.isArray(membersPayload?.data?.members)
+          ? membersPayload.data.members
+          : [];
+
+      const volunteers = membersList.length;
+      const validatedHours = membersList.reduce((sum, member) => {
+        const memberHours = Number(
+          member.horasTotales
+          ?? member.horastotales
+          ?? member.horas_validadas
+          ?? member.horasvalidadas
+          ?? 0
+        );
+        return sum + (Number.isNaN(memberHours) ? 0 : memberHours);
+      }, 0);
+
+      const financePayload = financeResult.status === 'fulfilled'
+        ? financeResult.value
+        : null;
+      const summary = financePayload?.data?.summary || financePayload?.data || {};
+      const cashBalance = Number(summary.balance ?? summary.saldo ?? 0);
+
+      setStatsValues({
+        activeProjects,
+        volunteers,
+        validatedHours,
+        cashBalance: Number.isNaN(cashBalance) ? 0 : cashBalance,
+      });
+    } catch {
+      setStatsValues({
+        activeProjects: 0,
+        volunteers: 0,
+        validatedHours: 0,
+        cashBalance: 0,
+      });
+    } finally {
+      setLoadingStats(false);
+    }
+  };
+
+  const formatCurrency = (value) => new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: 0,
+  }).format(Number(value || 0));
 
   const canSeeModule = (allowedRoles = []) => {
     if (allowedRoles.length === 0) return true;
@@ -110,29 +231,33 @@ const Dashboard = () => {
   const statsCards = [
     {
       title: 'Proyectos Activos',
-      value: '5',
+      value: loadingStats ? '...' : String(statsValues.activeProjects),
       color: 'bg-[#C4B5FD]',
       icon: BarChart3
     },
     {
       title: 'Voluntarios',
-      value: '48',
+      value: loadingStats ? '...' : String(statsValues.volunteers),
       color: 'bg-[#2dd4bf]',
       icon: Users
     },
     {
       title: 'Horas Validadas',
-      value: '320',
+      value: loadingStats ? '...' : String(statsValues.validatedHours),
       color: 'bg-[#E0F2FE]',
       icon: CheckCircle2
     },
     {
       title: 'Saldo en Caja',
-      value: '$8,300',
+      value: loadingStats ? '...' : formatCurrency(statsValues.cashBalance),
       color: 'bg-[#ccfbf1]',
       icon: PiggyBank
     }
   ];
+
+  const visibleStatsCards = role === 'miembro'
+    ? statsCards.filter((stat) => stat.title === 'Proyectos Activos')
+    : statsCards;
 
   return (
     <div className="min-h-screen bg-[#f8faf9]">
@@ -185,8 +310,8 @@ const Dashboard = () => {
         </div>
 
         {/* Quick Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          {statsCards.map((stat, index) => {
+        <div className={`grid grid-cols-1 ${role === 'miembro' ? 'md:grid-cols-1' : 'md:grid-cols-4'} gap-4`}>
+          {visibleStatsCards.map((stat, index) => {
             const IconComponent = stat.icon;
             return (
               <div key={index} className="card p-4">

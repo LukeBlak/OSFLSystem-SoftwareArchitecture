@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, Filter, Plus, UserX, Edit } from 'lucide-react';
+import { getMembers } from '../../services/memberService';
+import authService from '../../services/authService';
 
 const ListadoMiembros = () => {
     const navigate = useNavigate();
@@ -8,46 +10,74 @@ const ListadoMiembros = () => {
     const [busqueda, setBusqueda] = useState('');
     const [filtroEstado, setFiltroEstado] = useState('todos');
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    const [organizationId, setOrganizationId] = useState(
+        authService.getUser()?.organizationId
+        || authService.getUser()?.organizacionId
+        || authService.getUser()?.organization_id
+        || authService.getUser()?.organizacion_id
+        || ''
+    );
 
     useEffect(() => {
-        loadMiembros();
-    }, []);
+        hydrateOrganizationAndLoad();
+    }, [organizationId]);
 
-    const loadMiembros = async () => {
+    const hydrateOrganizationAndLoad = async () => {
+        let nextOrganizationId = organizationId;
+        if (!nextOrganizationId) {
+            const sessionUser = await authService.checkSession();
+            nextOrganizationId = sessionUser?.organizationId
+                || sessionUser?.organizacionId
+                || sessionUser?.organization_id
+                || sessionUser?.organizacion_id
+                || '';
+
+            if (nextOrganizationId && nextOrganizationId !== organizationId) {
+                setOrganizationId(nextOrganizationId);
+            }
+        }
+
+        await loadMiembros(nextOrganizationId);
+    };
+
+    const normalizeMembers = (response) => {
+        const items = Array.isArray(response?.data)
+            ? response.data
+            : response?.data?.members || response?.data?.miembros || [];
+
+        return items.map((member) => {
+            const estadoActivo = typeof member.estadoActivo === 'boolean'
+                ? member.estadoActivo
+                : typeof member.estadoactivo === 'boolean'
+                    ? member.estadoactivo
+                    : Boolean(member.isActive ?? true);
+
+            return {
+                id: member.id,
+                nombre: member.nombre || member.name || 'Sin nombre',
+                correo: member.email || member.correo || '',
+                telefono: member.telefono || member.phone || 'No registrado',
+                estado: estadoActivo ? 'Activo' : 'Inactivo',
+                comites: Array.isArray(member.comites)
+                    ? member.comites.map((comite) => comite?.nombre || comite?.name || String(comite))
+                    : [],
+            };
+        });
+    };
+
+    const loadMiembros = async (resolvedOrganizationId = '') => {
         setLoading(true);
+        setError('');
         try {
-            await new Promise(resolve => setTimeout(resolve, 500));
-            setMiembros([
-                {
-                    id: 1,
-                    nombre: 'Juan Pérez',
-                    correo: 'juan@esperanza.org',
-                    telefono: '7000-1234',
-                    estado: 'Activo',
-                    fechaIngreso: '2025-01-20',
-                    comites: ['Logística', 'Comunicación']
-                },
-                {
-                    id: 2,
-                    nombre: 'Laura Sánchez',
-                    correo: 'laura@esperanza.org',
-                    telefono: '7000-5678',
-                    estado: 'Activo',
-                    fechaIngreso: '2025-02-10',
-                    comites: ['Finanzas']
-                },
-                {
-                    id: 3,
-                    nombre: 'Pedro Díaz',
-                    correo: 'pedro@esperanza.org',
-                    telefono: '7000-9012',
-                    estado: 'Inactivo',
-                    fechaIngreso: '2024-11-05',
-                    comites: []
-                }
-            ]);
+            const response = await getMembers({
+                organizacionId: resolvedOrganizationId || undefined,
+                limit: 100,
+            });
+            setMiembros(normalizeMembers(response));
         } catch (error) {
-            alert('Error al cargar miembros');
+            setError(error.userMessage || error.message || 'Error al cargar miembros');
+            setMiembros([]);
         } finally {
             setLoading(false);
         }
@@ -112,6 +142,12 @@ const ListadoMiembros = () => {
                     </button>
                 </div>
             </div>
+
+            {error && (
+                <div className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-red-700 font-inter">
+                    {error}
+                </div>
+            )}
 
             {/* Tabla */}
             <div className="card overflow-hidden">

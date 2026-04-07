@@ -110,7 +110,7 @@ const resolveOrganizationId = async (user) => {
 
   const { data: publicUser, error: publicUserError } = await supabaseAdmin
     .from('usuario')
-    .select('organizationId, organizacionId, organization_id, organizacion_id')
+    .select('organizationId, organizacionId, organization_id, organizacion_id, organizacionid, organizationid')
     .eq('id', user.id)
     .limit(1)
     .maybeSingle();
@@ -121,6 +121,27 @@ const resolveOrganizationId = async (user) => {
       || publicUser.organizacionId
       || publicUser.organization_id
       || publicUser.organizacion_id
+      || publicUser.organizacionid
+      || publicUser.organizationid
+      || null
+    );
+  }
+
+  const { data: liderOrganizacion, error: liderOrgError } = await supabaseAdmin
+    .from('lider_organizacion')
+    .select('organizacionId, organizationId, organizacion_id, organization_id, organizacionid, organizationid')
+    .eq('id', user.id)
+    .limit(1)
+    .maybeSingle();
+
+  if (!liderOrgError && liderOrganizacion) {
+    return (
+      liderOrganizacion.organizacionId
+      || liderOrganizacion.organizationId
+      || liderOrganizacion.organizacion_id
+      || liderOrganizacion.organization_id
+      || liderOrganizacion.organizacionid
+      || liderOrganizacion.organizationid
       || null
     );
   }

@@ -40,7 +40,31 @@ function Perfil() {
         navigate('/login');
         return;
       }
-      setUser(currentUser);
+      const response = await fetch(`${API_URL}/profile`, {
+        method: 'GET',
+        headers: authService.authHeaders(),
+      });
+
+      const payload = await response.json().catch(() => ({}));
+
+      const profileData = payload?.data?.profile;
+      const mergedUser = profileData
+        ? {
+            ...currentUser,
+            id: profileData.id || currentUser.id,
+            email: profileData.email || currentUser.email,
+            role: profileData.role || currentUser.role,
+            profile: profileData.profile || currentUser.profile || {},
+            organizationId: profileData.organizationId || currentUser.organizationId || null,
+            organizationName: profileData.organizationName || currentUser.organizationName || null,
+            isActive: typeof profileData.isActive === 'boolean' ? profileData.isActive : currentUser.isActive,
+            createdAt: profileData.createdAt || currentUser.createdAt,
+            updatedAt: profileData.updatedAt || currentUser.updatedAt,
+          }
+        : currentUser;
+
+      setUser(mergedUser);
+      localStorage.setItem('user', JSON.stringify(mergedUser));
       
       //Recuperar último acceso guardado en localStorage
       const storedLastAccess = localStorage.getItem(`lastAccess_${currentUser.id || currentUser.email}`);
@@ -264,6 +288,8 @@ function Perfil() {
       ? user.estadoActivo
       : true;
 
+  const shouldShowOrganizationCard = String(user?.role || '').toLowerCase() !== 'super_admin';
+
   return (
     <div className="min-h-screen p-6 md:p-10">
       {/* Header */}
@@ -329,10 +355,12 @@ function Perfil() {
             </span>
           </div>
 
-          {user?.organizationId && (
+          {shouldShowOrganizationCard && (
             <div className="bg-gray-50 p-4 rounded-xl">
               <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Organización</label>
-              <p className="text-lg font-medium text-gray-800 mt-1">{user.organizationId}</p>
+              <p className="text-lg font-medium text-gray-800 mt-1 break-words">
+                {user?.organizationName || user?.organizationId || 'No asignada'}
+              </p>
             </div>
           )}
 

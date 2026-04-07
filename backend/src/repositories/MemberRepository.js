@@ -1,4 +1,4 @@
-import { supabase } from '../config/supabase.js';
+import { supabase, supabaseAdmin } from '../config/supabase.js';
 import { getRequestSupabaseClient } from '../utils/requestContext.js';
 
 const TABLE = 'miembro';
@@ -102,10 +102,76 @@ export const MemberRepository = {
   },
 
   async findAll(filters = {}) {
-    let query = getDb().from(TABLE).select('*', { count: 'exact' });
+    let query = supabaseAdmin.from(TABLE).select('*', { count: 'exact' });
 
-    if (filters.organizacionId) query = query.eq('organizacionId', filters.organizacionId);
-    if (typeof filters.estadoActivo === 'boolean') query = query.eq('estadoActivo', filters.estadoActivo);
+    if (filters.organizacionId) {
+      const { data: memberships, error: membershipError } = await supabaseAdmin
+        .from('miembro_comite')
+        .select('miembroid, comite:comiteid(organizacionid)')
+        .limit(5000);
+
+      if (membershipError) {
+        return { data: [], error: membershipError, count: 0 };
+      }
+
+      const { data: leaders, error: leadersError } = await supabaseAdmin
+        .from('lider_organizacion')
+        .select('id')
+        .eq('organizacionid', filters.organizacionId)
+        .limit(5000);
+
+      if (leadersError) {
+        return { data: [], error: leadersError, count: 0 };
+      }
+
+      const memberIds = [...new Set(
+        (memberships || [])
+          .filter((row) => row?.comite?.organizacionid === filters.organizacionId)
+          .map((row) => row.miembroid)
+          .filter(Boolean)
+      )];
+
+      const leaderIds = [...new Set((leaders || []).map((row) => row.id).filter(Boolean))];
+
+      const { data: authUsers, error: authUsersError } = await supabaseAdmin.auth.admin.listUsers({
+        page: 1,
+        perPage: 1000,
+      });
+
+      if (authUsersError) {
+        return { data: [], error: authUsersError, count: 0 };
+      }
+
+      const memberIdsByAuthOrg = (authUsers?.users || [])
+        .filter((user) => user?.user_metadata?.organization_id === filters.organizacionId)
+        .map((user) => user.id)
+        .filter(Boolean);
+
+      let memberIdsByCreator = [];
+      if (leaderIds.length > 0) {
+        const { data: membersByCreator, error: membersByCreatorError } = await supabaseAdmin
+          .from(TABLE)
+          .select('id')
+          .in('creado_por', leaderIds)
+          .limit(5000);
+
+        if (membersByCreatorError) {
+          return { data: [], error: membersByCreatorError, count: 0 };
+        }
+
+        memberIdsByCreator = (membersByCreator || []).map((row) => row.id).filter(Boolean);
+      }
+
+      const scopedMemberIds = [...new Set([...memberIds, ...memberIdsByCreator, ...memberIdsByAuthOrg])];
+
+      // Multitenant estricto: si no hay pertenencia verificable, no hay acceso.
+      if (scopedMemberIds.length === 0) {
+        return { data: [], error: null, count: 0 };
+      }
+
+      query = query.in('id', scopedMemberIds);
+    }
+    if (typeof filters.estadoActivo === 'boolean') query = query.eq('estadoactivo', filters.estadoActivo);
     if (filters.search) {
       query = query.or(`nombre.ilike.%${filters.search}%,email.ilike.%${filters.search}%,dui.ilike.%${filters.search}%`);
     }
@@ -114,6 +180,49 @@ export const MemberRepository = {
 
     const { data, error, count } = await query;
     return { data: data || [], error, count: count || 0 };
+  },
+
+  async resolveOrganizationId(memberId) {
+    const { data: memberships, error: membershipError } = await supabaseAdmin
+      .from('miembro_comite')
+      .select('comite:comiteid(organizacionid)')
+      .eq('miembroid', memberId)
+      .limit(1000);
+
+    if (!membershipError && (memberships || []).length > 0) {
+      const firstWithOrg = (memberships || []).find((row) => row?.comite?.organizacionid);
+      if (firstWithOrg?.comite?.organizacionid) {
+        return firstWithOrg.comite.organizacionid;
+      }
+    }
+
+    const { data: member, error: memberError } = await supabaseAdmin
+      .from(TABLE)
+      .select('creado_por')
+      .eq('id', memberId)
+      .limit(1)
+      .maybeSingle();
+
+    if (!memberError && member?.creado_por) {
+      const { data: leader, error: leaderError } = await supabaseAdmin
+        .from('lider_organizacion')
+        .select('organizacionid')
+        .eq('id', member.creado_por)
+        .limit(1)
+        .maybeSingle();
+
+      if (!leaderError && leader?.organizacionid) {
+        return leader.organizacionid;
+      }
+    }
+
+    const { data: authUser, error: authUserError } = await supabaseAdmin.auth.admin.getUserById(memberId);
+
+    if (!authUserError) {
+      return authUser?.user?.user_metadata?.organization_id || null;
+    }
+
+    return null;
   },
 
   async getMemberHours(memberId, filters = {}) {

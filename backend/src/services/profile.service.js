@@ -128,9 +128,108 @@ const normalizeUser = (row, resolvedRole = null) => {
     role: resolvedRole || row.role || 'miembro',
     profile: normalizedProfile,
     organizationId: row.organizationId ?? row.organization_id ?? null,
+    organizationName: row.organizationName ?? row.organization_name ?? null,
     isActive: row.isActive ?? row.estadoActivo ?? true,
     createdAt: row.createdAt ?? row.created_at ?? null,
     updatedAt: row.updatedAt ?? row.updated_at ?? null,
+  };
+};
+
+const resolveOrganizationName = async (organizationId) => {
+  if (!organizationId) return null;
+
+  const { data, error } = await supabaseAdmin
+    .from('organizacion')
+    .select('nombre')
+    .eq('id', organizationId)
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    logger.warn('No se pudo resolver nombre de organización para perfil', {
+      organizationId,
+      error,
+    });
+    return null;
+  }
+
+  return data?.nombre || null;
+};
+
+const resolveOrganizationContext = async ({ userId, role, fallbackOrganizationId = null }) => {
+  let organizationId = fallbackOrganizationId || null;
+
+  try {
+    const { data, error } = await supabaseAdmin.auth.admin.getUserById(userId);
+    if (!error && data?.user?.user_metadata) {
+      organizationId = organizationId
+        || data.user.user_metadata.organizationId
+        || data.user.user_metadata.organization_id
+        || null;
+    }
+  } catch (error) {
+    logger.warn('No se pudo resolver organization_id desde Auth en perfil', {
+      userId,
+      error: error.message,
+    });
+  }
+
+  const normalizedRole = String(role || '').toLowerCase();
+
+  if (!organizationId && normalizedRole === 'lider_organizacion') {
+    const { data, error } = await supabaseAdmin
+      .from('lider_organizacion')
+      .select('organizacionid')
+      .eq('id', userId)
+      .limit(1)
+      .maybeSingle();
+
+    if (!error && data?.organizacionid) {
+      organizationId = data.organizacionid;
+    }
+  }
+
+  if (!organizationId && (normalizedRole === 'lider_comite' || normalizedRole === 'miembro')) {
+    const { data, error } = await supabaseAdmin
+      .from('miembro_comite')
+      .select('comite:comiteid(organizacionid)')
+      .eq('miembroid', userId)
+      .limit(1000);
+
+    if (!error && Array.isArray(data)) {
+      const withOrg = data.find((row) => row?.comite?.organizacionid);
+      if (withOrg?.comite?.organizacionid) {
+        organizationId = withOrg.comite.organizacionid;
+      }
+    }
+
+    if (!organizationId) {
+      const { data: member, error: memberError } = await supabaseAdmin
+        .from('miembro')
+        .select('creado_por')
+        .eq('id', userId)
+        .limit(1)
+        .maybeSingle();
+
+      if (!memberError && member?.creado_por) {
+        const { data: creatorLeader, error: creatorLeaderError } = await supabaseAdmin
+          .from('lider_organizacion')
+          .select('organizacionid')
+          .eq('id', member.creado_por)
+          .limit(1)
+          .maybeSingle();
+
+        if (!creatorLeaderError && creatorLeader?.organizacionid) {
+          organizationId = creatorLeader.organizacionid;
+        }
+      }
+    }
+  }
+
+  const organizationName = await resolveOrganizationName(organizationId);
+  return {
+    organizationId,
+    organizationName,
   };
 };
 
@@ -202,12 +301,19 @@ const getAuthFallbackProfile = async (userId) => {
     authUser.raw_app_meta_data?.role,
   ]) || 'miembro';
 
+  const organizationContext = await resolveOrganizationContext({
+    userId,
+    role: resolvedRole,
+    fallbackOrganizationId: metadata.organizationId || metadata.organization_id || null,
+  });
+
   return {
     id: authUser.id,
     email: authUser.email,
     role: resolvedRole,
     profile: metadata.profile || {},
-    organizationId: metadata.organizationId || metadata.organization_id || null,
+    organizationId: organizationContext.organizationId,
+    organizationName: organizationContext.organizationName,
     isActive: true,
     createdAt: authUser.created_at || null,
     updatedAt: authUser.updated_at || null,
@@ -232,8 +338,18 @@ const getProfileByUserId = async (userId) => {
   }
 
   const resolvedRole = await resolveUserRole(userId, data);
+  const normalized = normalizeUser(data, resolvedRole);
+  const organizationContext = await resolveOrganizationContext({
+    userId,
+    role: resolvedRole,
+    fallbackOrganizationId: normalized.organizationId,
+  });
 
-  return normalizeUser(data, resolvedRole);
+  return {
+    ...normalized,
+    organizationId: organizationContext.organizationId,
+    organizationName: organizationContext.organizationName,
+  };
 };
 
 const updateProfile = async (userId, updateData) => {

@@ -182,7 +182,8 @@ export const createMemberSchema = z.object({
    */
   organizacionId: z
     .string()
-    .uuid('El ID de organización debe ser un UUID válido'),
+    .uuid('El ID de organización debe ser un UUID válido')
+    .optional(),
   
   /**
    * Estado inicial del miembro
@@ -528,11 +529,11 @@ export const formatMemberForResponse = (member) => {
     telefono: member.telefono,
     fechanacimiento: member.fechanacimiento,
     direccion: member.direccion,
-    horasTotales: member.horasTotales,
-    estadoActivo: member.estadoActivo,
-    organizacionId: member.organizacionId,
-    fechaCreacion: member.fechaCreacion,
-    fechaEdicion: member.fechaEdicion,
+    horasTotales: member.horasTotales ?? member.horastotales ?? 0,
+    estadoActivo: member.estadoActivo ?? member.estadoactivo ?? true,
+    organizacionId: member.organizacionId ?? member.organizacionid ?? null,
+    fechaCreacion: member.fechaCreacion ?? member.fecha_creacion ?? null,
+    fechaEdicion: member.fechaEdicion ?? member.fecha_edicion ?? null,
     // Campos relacionados (si se incluyen)
     organizacion: member.organizacion || null,
     usuario: member.usuario || null,
