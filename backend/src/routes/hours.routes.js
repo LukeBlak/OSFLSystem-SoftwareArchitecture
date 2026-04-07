@@ -33,7 +33,7 @@ const canViewHours = [
  * POST /api/hours - Registrar asistencia (CU-16)
  */
 router.post(
-  '/',
+  '/attendance',
   canRegisterHours,
   validate(registerHoursSchema),
   hoursController.registerHours
@@ -55,6 +55,15 @@ router.get(
   '/member/:miembroId/history',
   canViewHours,
   hoursController.getMemberHoursHistory
+);
+
+/**
+ * GET /api/hours/history/:userId - Obtener historial de horas de un usuario
+ */
+router.get(
+  '/history/:userId',
+  canViewHours,
+  hoursController.getHoursHistory
 );
 
 /**

@@ -92,12 +92,27 @@ import { supabase } from '../config/supabase.js';
  */
 export const registerHours = async (req, res, next) => {
   try {
-    const hoursData = req.body;
-    
-    // Llamar al servicio para registrar la asistencia
-    const registroCreado = await hoursService.registerHours(hoursData, req.user);
+    const { miembroId, proyectoId, fecha, cantidadHoras, descripcion } = req.body;
 
-    // Retornar respuesta exitosa con código 201 (Created)
+    // Validaciones simples, como te dijeron
+    if (!miembroId || !proyectoId || !fecha || cantidadHoras === undefined || cantidadHoras === null) {
+      throw ApiError.badRequest(
+        'miembroId, proyectoId, fecha y cantidadHoras son requeridos'
+      );
+    }
+
+    const registroCreado = await hoursService.registerHours(
+      req.supabase,
+      {
+        miembroId,
+        proyectoId,
+        fecha,
+        cantidadHoras,
+        descripcion
+      },
+      req.user
+    );
+
     return res.status(StatusCodes.CREATED).json(
       new ApiResponse(
         StatusCodes.CREATED,
@@ -108,7 +123,7 @@ export const registerHours = async (req, res, next) => {
   } catch (error) {
     next(error);
   }
-};
+}
 
 // =============================================================================
 // CONSULTAR HISTORIAL DE HORAS (CU-18)
@@ -237,6 +252,37 @@ export const getMyHoursHistory = async (req, res, next) => {
 };
 
 /**
+ * Obtener historial de horas de un usuario
+ * 
+ * @route GET /api/hours/history/:userId
+ * @access Privado
+ */
+export const getHoursHistory = async (req, res, next) => {
+  try {
+    const { userId } = req.params;
+
+    if (!userId) {
+      throw ApiError.badRequest('userId es requerido');
+    }
+
+    const history = await hoursService.getHoursHistory(
+      req.supabase,
+      userId
+    );
+
+    return res.status(StatusCodes.OK).json(
+      new ApiResponse(
+        StatusCodes.OK,
+        history,
+        'Historial de horas obtenido exitosamente'
+      )
+    );
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
  * Listar registros de horas con filtros
  * 
  * @route GET /api/hours
@@ -304,6 +350,7 @@ export const getMemberTotalHours = async (req, res, next) => {
 export default {
   registerHours,
   getMemberHoursHistory,
+  getHoursHistory,
   getProjectHoursSummary,
   getHoursReport,
   getMyHoursHistory,
