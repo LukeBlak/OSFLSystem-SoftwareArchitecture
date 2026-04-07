@@ -12,6 +12,15 @@ export const ROUTES = {
   '/admin/organizaciones/nueva': [ROLES.SUPER_ADMIN],
   '/admin/organizaciones/:id/editar': [ROLES.SUPER_ADMIN],
   '/admin/usuarios': [ROLES.SUPER_ADMIN],
+
+  '/estructura/organizaciones': [ROLES.ADMIN, ROLES.LIDER_ORGANIZACION],
+  '/estructura/organizaciones/nueva': [ROLES.ADMIN, ROLES.LIDER_ORGANIZACION],
+  '/estructura/miembros': [ROLES.ADMIN, ROLES.LIDER_ORGANIZACION, ROLES.LIDER_COMITE],
+  '/estructura/miembros/nuevo': [ROLES.ADMIN, ROLES.LIDER_ORGANIZACION, ROLES.LIDER_COMITE],
+  '/estructura/miembros/baja/:id': [ROLES.ADMIN, ROLES.LIDER_ORGANIZACION, ROLES.LIDER_COMITE],
+  '/estructura/comites': [ROLES.ADMIN, ROLES.LIDER_ORGANIZACION, ROLES.LIDER_COMITE],
+  '/estructura/comites/nuevo': [ROLES.ADMIN, ROLES.LIDER_ORGANIZACION, ROLES.LIDER_COMITE],
+  '/estructura/comites/:id/gestion': [ROLES.ADMIN, ROLES.LIDER_ORGANIZACION, ROLES.LIDER_COMITE],
   
   '/proyectos/planificar': [ROLES.ADMIN, ROLES.LIDER_ORGANIZACION],
   '/proyectos/vincular': [ROLES.ADMIN, ROLES.LIDER_ORGANIZACION],
