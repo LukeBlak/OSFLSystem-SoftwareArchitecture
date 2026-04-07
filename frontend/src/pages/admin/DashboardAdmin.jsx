@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { apiClient } from '../../services/apiClient';
 import {
   Building2,
   Users2,
@@ -22,19 +23,14 @@ const DashboardAdmin = () => {
   useEffect(() => {
     const fetchGlobalStats = async () => {
       try {
-        const token = localStorage.getItem('token');
+        const response = await apiClient.get('/admin/global-stats');
+        const stats = response?.data || response || {};
 
-        const response = await fetch('/api/admin/global-stats', {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
+        setGlobalStats({
+          totalOrganizaciones: Number(stats.totalOrganizaciones || 0),
+          totalUsuarios: Number(stats.totalUsuarios || 0),
+          proyectosGlobales: Number(stats.proyectosGlobales || 0),
         });
-
-        if (!response.ok) throw new Error('Error al obtener datos');
-
-        const data = await response.json();
-        setGlobalStats(data);
       } catch (error) {
         console.error("Error cargando estadísticas reales:", error);
       } finally {
