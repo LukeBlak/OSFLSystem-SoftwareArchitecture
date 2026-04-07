@@ -15,7 +15,7 @@ router.post('/', postulationController.createPostulation);
 // GET  /api/projects/:proyectoId/postulations  — lista para coordinador
 router.get(
   '/',
-  requireRole(['admin', 'lider_organizacion']),
+  requireRole(['lider_organizacion', 'lider_comite']),
   postulationController.getPostulationsByProject
 );
 
@@ -25,7 +25,7 @@ router.get(
 // PATCH /api/projects/:proyectoId/postulations/:id  — CU-15
 router.patch(
   '/:id',
-  requireRole(['admin', 'lider_organizacion']),
+  requireRole(['lider_organizacion', 'lider_comite']),
   [
     body('estado')
       .isIn(['Aceptada', 'Rechazada'])

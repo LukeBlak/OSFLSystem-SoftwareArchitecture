@@ -20,13 +20,13 @@ const router = Router();
 // Middleware de roles para registro de horas
 const canRegisterHours = [
   authenticate,
-  requireRole([ROLES.ADMIN, ROLES.SUPER_ADMIN, ROLES.LIDER_ORGANIZACION, ROLES.LIDER_COMITE]),
+  requireRole([ROLES.LIDER_COMITE]),
 ];
 
 // Middleware para ver horas (todos los autenticados)
 const canViewHours = [
   authenticate,
-  requireRole([ROLES.ADMIN, ROLES.SUPER_ADMIN, ROLES.LIDER_ORGANIZACION, ROLES.LIDER_COMITE, ROLES.MIEMBRO]),
+  requireRole([ROLES.LIDER_ORGANIZACION, ROLES.LIDER_COMITE, ROLES.MIEMBRO]),
 ];
 
 /**

@@ -133,7 +133,7 @@ const writeCommitteeLimiter = rateLimit({
  */
 const canManageCommittees = [
   authenticate,
-  requireRole([ROLES.ADMIN, ROLES.SUPER_ADMIN, ROLES.LIDER_ORGANIZACION]),
+  requireRole([ROLES.LIDER_ORGANIZACION]),
 ];
 
 /**
@@ -143,13 +143,7 @@ const canManageCommittees = [
  */
 const canViewCommittees = [
   authenticate,
-  requireRole([
-    ROLES.ADMIN,
-    ROLES.SUPER_ADMIN,
-    ROLES.LIDER_ORGANIZACION,
-    ROLES.LIDER_COMITE,
-    ROLES.MIEMBRO,
-  ]),
+  requireRole([ROLES.LIDER_ORGANIZACION, ROLES.LIDER_COMITE]),
 ];
 
 // =============================================================================

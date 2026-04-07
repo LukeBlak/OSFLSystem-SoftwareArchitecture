@@ -142,7 +142,7 @@ const canCreateOrganization = [
  */
 const canManageOrganization = [
   authenticate,
-  requireRole([ROLES.ADMIN, ROLES.SUPER_ADMIN, ROLES.LIDER_ORGANIZACION]),
+  requireRole([ROLES.ADMIN, ROLES.SUPER_ADMIN]),
 ];
 
 /**
@@ -152,13 +152,7 @@ const canManageOrganization = [
  */
 const canViewOrganizations = [
   authenticate,
-  requireRole([
-    ROLES.ADMIN,
-    ROLES.SUPER_ADMIN,
-    ROLES.LIDER_ORGANIZACION,
-    ROLES.LIDER_COMITE,
-    ROLES.MIEMBRO,
-  ]),
+  requireRole([ROLES.ADMIN, ROLES.SUPER_ADMIN]),
 ];
 
 // =============================================================================

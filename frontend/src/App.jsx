@@ -66,28 +66,28 @@ function App() {
         <Route path="/admin/organizaciones/:id/editar" element={<Protected roles={[ROLES.SUPER_ADMIN]}><RegistroOrganizacion /></Protected>} />
         <Route path="/admin/usuarios" element={<Protected roles={[ROLES.SUPER_ADMIN]}><UsuariosAdmin /></Protected>} />
 
-        <Route path="/estructura/organizaciones" element={<Protected roles={[ROLES.ADMIN, ROLES.LIDER_ORGANIZACION]}><ConsultaOrganizaciones /></Protected>} />
-        <Route path="/estructura/organizaciones/nueva" element={<Protected roles={[ROLES.ADMIN, ROLES.LIDER_ORGANIZACION]}><RegistroOrganizacion /></Protected>} />
-        <Route path="/estructura/miembros" element={<Protected roles={[ROLES.ADMIN, ROLES.LIDER_ORGANIZACION, ROLES.LIDER_COMITE]}><ListadoMiembros /></Protected>} />
-        <Route path="/estructura/miembros/nuevo" element={<Protected roles={[ROLES.ADMIN, ROLES.LIDER_ORGANIZACION, ROLES.LIDER_COMITE]}><RegistroMiembros /></Protected>} />
-        <Route path="/estructura/miembros/baja/:id" element={<Protected roles={[ROLES.ADMIN, ROLES.LIDER_ORGANIZACION, ROLES.LIDER_COMITE]}><BajaMiembro /></Protected>} />
-        <Route path="/estructura/comites" element={<Protected roles={[ROLES.ADMIN, ROLES.LIDER_ORGANIZACION, ROLES.LIDER_COMITE]}><ConsultaComites /></Protected>} />
-        <Route path="/estructura/comites/nuevo" element={<Protected roles={[ROLES.ADMIN, ROLES.LIDER_ORGANIZACION, ROLES.LIDER_COMITE]}><CrearComite /></Protected>} />
-        <Route path="/estructura/comites/:id/gestion" element={<Protected roles={[ROLES.ADMIN, ROLES.LIDER_ORGANIZACION, ROLES.LIDER_COMITE]}><GestionComite /></Protected>} />
+        <Route path="/estructura/organizaciones" element={<Protected roles={[ROLES.ADMIN]}><ConsultaOrganizaciones /></Protected>} />
+        <Route path="/estructura/organizaciones/nueva" element={<Protected roles={[ROLES.ADMIN]}><RegistroOrganizacion /></Protected>} />
+        <Route path="/estructura/miembros" element={<Protected roles={[ROLES.LIDER_ORGANIZACION, ROLES.LIDER_COMITE]}><ListadoMiembros /></Protected>} />
+        <Route path="/estructura/miembros/nuevo" element={<Protected roles={[ROLES.LIDER_ORGANIZACION]}><RegistroMiembros /></Protected>} />
+        <Route path="/estructura/miembros/baja/:id" element={<Protected roles={[ROLES.LIDER_ORGANIZACION]}><BajaMiembro /></Protected>} />
+        <Route path="/estructura/comites" element={<Protected roles={[ROLES.LIDER_ORGANIZACION, ROLES.LIDER_COMITE]}><ConsultaComites /></Protected>} />
+        <Route path="/estructura/comites/nuevo" element={<Protected roles={[ROLES.LIDER_ORGANIZACION]}><CrearComite /></Protected>} />
+        <Route path="/estructura/comites/:id/gestion" element={<Protected roles={[ROLES.LIDER_ORGANIZACION, ROLES.LIDER_COMITE]}><GestionComite /></Protected>} />
         
-        <Route path="/proyectos/planificar" element={<Protected roles={[ROLES.ADMIN, ROLES.LIDER_ORGANIZACION]}><PlanificarProyecto /></Protected>} />
-        <Route path="/proyectos/vincular" element={<Protected roles={[ROLES.ADMIN, ROLES.LIDER_ORGANIZACION]}><VincularComite /></Protected>} />
-        <Route path="/proyectos/vincular/:projectId" element={<Protected roles={[ROLES.ADMIN, ROLES.LIDER_ORGANIZACION]}><VincularComite /></Protected>} />
-        <Route path="/proyectos/inscribirse" element={<Protected roles={[ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.LIDER_ORGANIZACION, ROLES.LIDER_COMITE, ROLES.MIEMBRO]}><InscribirseProyecto /></Protected>} />
-        <Route path="/proyectos/aprobar" element={<Protected roles={[ROLES.ADMIN, ROLES.LIDER_ORGANIZACION]}><AprobarParticipante /></Protected>} />
-        <Route path="/proyectos/aprobar/:projectId" element={<Protected roles={[ROLES.ADMIN, ROLES.LIDER_ORGANIZACION]}><AprobarParticipante /></Protected>} />
-        <Route path="/horas/asistencia" element={<Protected roles={[ROLES.ADMIN, ROLES.SUPER_ADMIN, ROLES.LIDER_ORGANIZACION, ROLES.LIDER_COMITE]}><RegistroAsistencia /></Protected>} />
-        <Route path="/horas/validar" element={<Protected roles={[ROLES.ADMIN, ROLES.SUPER_ADMIN, ROLES.LIDER_ORGANIZACION, ROLES.LIDER_COMITE]}><ValidarHoras /></Protected>} />
-        <Route path="/horas/historial" element={<Protected roles={[ROLES.ADMIN, ROLES.SUPER_ADMIN, ROLES.LIDER_ORGANIZACION, ROLES.LIDER_COMITE, ROLES.MIEMBRO]}><HistorialHoras /></Protected>} />
-        <Route path="/finanzas/ingreso/nuevo" element={<Protected roles={[ROLES.ADMIN, ROLES.SUPER_ADMIN, ROLES.LIDER_ORGANIZACION]}><RegistroIngreso /></Protected>} />
-        <Route path="/finanzas/egreso/nuevo" element={<Protected roles={[ROLES.ADMIN, ROLES.SUPER_ADMIN, ROLES.LIDER_ORGANIZACION]}><RegistroEgreso /></Protected>} />
-        <Route path="/finanzas/caja" element={<Protected roles={[ROLES.ADMIN, ROLES.SUPER_ADMIN, ROLES.LIDER_ORGANIZACION]}><ConsultarCaja /></Protected>} />
-        <Route path="/finanzas/reportes" element={<Protected roles={[ROLES.ADMIN, ROLES.SUPER_ADMIN, ROLES.LIDER_ORGANIZACION]}><ReportesFinancieros /></Protected>} />
+        <Route path="/proyectos/planificar" element={<Protected roles={[ROLES.LIDER_ORGANIZACION]}><PlanificarProyecto /></Protected>} />
+        <Route path="/proyectos/vincular" element={<Protected roles={[ROLES.LIDER_ORGANIZACION]}><VincularComite /></Protected>} />
+        <Route path="/proyectos/vincular/:projectId" element={<Protected roles={[ROLES.LIDER_ORGANIZACION]}><VincularComite /></Protected>} />
+        <Route path="/proyectos/inscribirse" element={<Protected roles={[ROLES.MIEMBRO]}><InscribirseProyecto /></Protected>} />
+        <Route path="/proyectos/aprobar" element={<Protected roles={[ROLES.LIDER_ORGANIZACION, ROLES.LIDER_COMITE]}><AprobarParticipante /></Protected>} />
+        <Route path="/proyectos/aprobar/:projectId" element={<Protected roles={[ROLES.LIDER_ORGANIZACION, ROLES.LIDER_COMITE]}><AprobarParticipante /></Protected>} />
+        <Route path="/horas/asistencia" element={<Protected roles={[ROLES.LIDER_COMITE]}><RegistroAsistencia /></Protected>} />
+        <Route path="/horas/validar" element={<Protected roles={[ROLES.LIDER_COMITE]}><ValidarHoras /></Protected>} />
+        <Route path="/horas/historial" element={<Protected roles={[ROLES.MIEMBRO]}><HistorialHoras /></Protected>} />
+        <Route path="/finanzas/ingreso/nuevo" element={<Protected roles={[ROLES.LIDER_ORGANIZACION, ROLES.LIDER_COMITE]}><RegistroIngreso /></Protected>} />
+        <Route path="/finanzas/egreso/nuevo" element={<Protected roles={[ROLES.LIDER_ORGANIZACION, ROLES.LIDER_COMITE]}><RegistroEgreso /></Protected>} />
+        <Route path="/finanzas/caja" element={<Protected roles={[ROLES.ADMIN, ROLES.LIDER_ORGANIZACION, ROLES.LIDER_COMITE, ROLES.MIEMBRO]}><ConsultarCaja /></Protected>} />
+        <Route path="/finanzas/reportes" element={<Protected roles={[ROLES.LIDER_ORGANIZACION, ROLES.LIDER_COMITE, ROLES.MIEMBRO]}><ReportesFinancieros /></Protected>} />
 
         {/* Redirecciones por defecto */}
         <Route path="/inicio" element={<Navigate to="/" replace />} />
