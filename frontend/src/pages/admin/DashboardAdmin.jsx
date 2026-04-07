@@ -1,234 +1,156 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import Navbar from '../../components/Navbar';
-import {
-  Building2,
-  Plus,
-  Users,
-  TrendingUp,
+import { Link } from 'react-router-dom';
+import { 
+  Building2, 
+  Users2, 
+  CheckCircle2, 
+  ArrowRight, 
+  LayoutDashboard,
   Settings,
-  ArrowRight,
-  Loader
+  ShieldCheck,
+  TrendingUp
 } from 'lucide-react';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
-
 const DashboardAdmin = () => {
-  const navigate = useNavigate();
-  const [stats, setStats] = useState({
-    totalOrganizations: 0,
-    activeOrganizations: 0,
-    totalMembers: 0,
-    loading: true,
-    error: null
+  const [globalStats, setGlobalStats] = useState({
+    totalOrganizaciones: 0,
+    organizacionesActivas: 0,
+    totalUsuarios: 0,
+    proyectosGlobales: 0
   });
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadDashboardStats();
+    // Simulación de carga de estadísticas globales
+    // En un entorno real, esto llamaría a un endpoint como /api/admin/global-stats
+    const fetchGlobalStats = async () => {
+      try {
+        // Ejemplo de cómo se obtendría si existiera el endpoint
+        // const response = await fetch('/api/admin/stats', { headers: { ... } });
+        // const data = await response.json();
+        
+        // Simulación de datos para demostración funcional
+        setGlobalStats({
+          totalOrganizaciones: 24,
+          organizacionesActivas: 21,
+          totalUsuarios: 158,
+          proyectosGlobales: 45
+        });
+      } catch (error) {
+        console.error("Error cargando estadísticas globales:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchGlobalStats();
   }, []);
 
-  const loadDashboardStats = async () => {
-    try {
-      const response = await fetch(`${API_URL}/organizations`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        const organizations = data.data?.organizations || [];
-        
-        setStats({
-          totalOrganizations: organizations.length,
-          activeOrganizations: organizations.filter(org => org.estado !== 'inactiva').length,
-          totalMembers: organizations.reduce((sum, org) => sum + (org.miembros || 0), 0),
-          loading: false,
-          error: null
-        });
-      } else {
-        setStats(prev => ({
-          ...prev,
-          loading: false,
-          error: 'Error al cargar estadísticas'
-        }));
-      }
-    } catch (error) {
-      console.error('Error loading stats:', error);
-      setStats(prev => ({
-        ...prev,
-        loading: false,
-        error: error.message
-      }));
-    }
-  };
-
-  const adminModules = [
-    {
-      title: 'Gestionar Organizaciones',
-      description: 'Ver, editar y administrar todas las organizaciones del sistema',
-      icon: Building2,
-      iconBg: 'bg-[#3b82f6]',
-      link: '/admin/organizaciones',
-      actions: [
-        { label: 'Ver Todas', path: '/admin/organizaciones' },
-        { label: 'Nueva Organización', path: '/admin/organizaciones/nueva' }
-      ]
-    },
-    {
-      title: 'Gestionar Usuarios',
-      description: 'Visualizar usuarios registrados y su rol dentro del sistema',
-      icon: Users,
-      iconBg: 'bg-[#0d9488]',
-      link: '/admin/usuarios',
-      actions: [
-        { label: 'Ver Usuarios', path: '/admin/usuarios' }
-      ]
-    },
-    {
-      title: 'Configuración del Sistema',
-      description: 'Ajustar parámetros generales y políticas de la plataforma',
-      icon: Settings,
-      iconBg: 'bg-[#8b5cf6]',
-      link: '/admin',
-      actions: [
-        { label: 'Configuración General (Próximamente)', path: '/admin' }
-      ]
-    }
-  ];
-
-  const statCards = [
-    {
-      title: 'Organizaciones Totales',
-      value: stats.totalOrganizations,
-      color: 'bg-[#dbeafe]',
-      icon: Building2,
-      iconColor: 'text-[#3b82f6]'
-    },
-    {
-      title: 'Organizaciones Activas',
-      value: stats.activeOrganizations,
-      color: 'bg-[#dcfce7]',
-      icon: TrendingUp,
-      iconColor: 'text-[#16a34a]'
-    },
-    {
-      title: 'Miembros Totales',
-      value: stats.totalMembers,
-      color: 'bg-[#fce7f3]',
-      icon: Users,
-      iconColor: 'text-[#ec4899]'
-    }
-  ];
-
   return (
-    <div className="min-h-screen bg-[#f8faf9]">
-      <Navbar />
-
-      <main className="container mx-auto px-6 pt-28 pb-12">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="font-poppins font-bold text-3xl text-text-primary mb-2">
-            Panel Administrativo
-          </h1>
-          <p className="font-inter text-text-secondary">
-            Gestiona las organizaciones y configuración del sistema
-          </p>
+    <div className="min-h-screen bg-[#F8FAF9] p-6 md:p-12">
+      <div className="max-w-6xl mx-auto">
+        
+        {/* Encabezado de Bienvenida */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between mb-12 gap-6">
+          <div className="flex items-center gap-4">
+            <div className="bg-[#7C3AED] p-3 rounded-2xl shadow-lg shadow-purple-100">
+              <ShieldCheck className="w-8 h-8 text-white" />
+            </div>
+            <div>
+              <h1 className="text-3xl font-bold text-[#1F2937] font-poppins">Panel de Control</h1>
+              <p className="text-[#64748B] font-inter">Bienvenido de vuelta, Super Administrador</p>
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-xl border border-[#E2E8F0] text-sm font-medium text-[#64748B] font-inter shadow-sm">
+            <div className="w-2 h-2 bg-[#22C55E] rounded-full animate-pulse"></div>
+            Sistema en Línea
+          </div>
         </div>
 
-        {/* Stats Cards */}
-        {!stats.loading && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-            {statCards.map((stat, index) => {
-              const IconComponent = stat.icon;
-              return (
-                <div key={index} className="card p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="font-inter text-text-secondary text-sm font-semibold">
-                      {stat.title}
-                    </h3>
-                    <div className={`${stat.color} w-12 h-12 rounded-lg flex items-center justify-center`}>
-                      <IconComponent size={24} className={stat.iconColor} />
-                    </div>
-                  </div>
-                  <p className="font-poppins font-bold text-3xl text-text-primary">
-                    {stat.value}
-                  </p>
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {stats.loading && (
-          <div className="flex items-center justify-center py-12">
-            <Loader className="animate-spin text-[#0d9488]" size={32} />
-          </div>
-        )}
-
-        {stats.error && (
-          <div className="card p-4 mb-8 bg-red-50 border border-red-200">
-            <p className="text-red-700 font-inter">{stats.error}</p>
-          </div>
-        )}
-
-        {/* Admin Modules */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {adminModules.map((module, index) => {
-            const IconComponent = module.icon;
-            return (
-              <div
-                key={index}
-                className="card p-6 cursor-pointer hover:shadow-lg transition-shadow"
-              >
-                <div className="flex items-start justify-between mb-4">
-                  <div className={`${module.iconBg} w-14 h-14 rounded-lg flex items-center justify-center`}>
-                    <IconComponent size={28} className="text-white" />
-                  </div>
-                </div>
-
-                <h3 className="font-poppins font-bold text-xl text-text-primary mb-2">
-                  {module.title}
-                </h3>
-                <p className="font-inter text-text-secondary text-sm mb-6">
-                  {module.description}
-                </p>
-
-                {/* Actions */}
-                <div className="space-y-3">
-                  {module.actions.map((action, idx) => (
-                    <button
-                      key={idx}
-                      onClick={() => navigate(action.path)}
-                      className="w-full flex items-center justify-between px-4 py-3 rounded-lg
-                               hover:bg-gray-50 border border-gray-200 transition-colors duration-200
-                               font-inter text-text-primary text-sm"
-                    >
-                      <span>{action.label}</span>
-                      <ArrowRight size={16} className="text-text-secondary" />
-                    </button>
-                  ))}
-                </div>
+        {/* Sección de Estadísticas Principales */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+          
+          {/* Card: Total Organizaciones */}
+          <div className="bg-white p-8 rounded-3xl border border-[#E2E8F0] shadow-sm hover:shadow-md transition-all group">
+            <div className="flex justify-between items-start mb-4">
+              <div className="bg-[#E0F2FE] p-3 rounded-2xl group-hover:scale-110 transition-transform">
+                <Building2 className="w-7 h-7 text-[#38BDF8]" />
               </div>
-            );
-          })}
+              <span className="text-[10px] font-bold text-[#38BDF8] bg-[#E0F2FE] px-2 py-1 rounded-full font-inter uppercase tracking-widest">Global</span>
+            </div>
+            <p className="text-[#64748B] font-inter text-sm mb-1 font-medium">Total Organizaciones</p>
+            <h2 className="text-4xl font-bold text-[#1F2937] font-poppins">
+              {loading ? "..." : globalStats.totalOrganizaciones}
+            </h2>
+          </div>
+
+          {/* Card: Organizaciones Activas */}
+          <div className="bg-white p-8 rounded-3xl border border-[#E2E8F0] shadow-sm hover:shadow-md transition-all group">
+            <div className="flex justify-between items-start mb-4">
+              <div className="bg-[#DCECE7] p-3 rounded-2xl group-hover:scale-110 transition-transform">
+                <CheckCircle2 className="w-7 h-7 text-[#22C55E]" />
+              </div>
+              <span className="text-[10px] font-bold text-[#22C55E] bg-[#DCECE7] px-2 py-1 rounded-full font-inter uppercase tracking-widest">En curso</span>
+            </div>
+            <p className="text-[#64748B] font-inter text-sm mb-1 font-medium">Organizaciones Activas</p>
+            <h2 className="text-4xl font-bold text-[#1F2937] font-poppins">
+              {loading ? "..." : globalStats.organizacionesActivas}
+            </h2>
+          </div>
+
+          {/* Card: Cantidad de Usuarios */}
+          <div className="bg-white p-8 rounded-3xl border border-[#E2E8F0] shadow-sm hover:shadow-md transition-all group">
+            <div className="flex justify-between items-start mb-4">
+              <div className="bg-[#EDE9FE] p-3 rounded-2xl group-hover:scale-110 transition-transform">
+                <Users2 className="w-7 h-7 text-[#7C3AED]" />
+              </div>
+              <span className="text-[10px] font-bold text-[#7C3AED] bg-[#EDE9FE] px-2 py-1 rounded-full font-inter uppercase tracking-widest">Usuarios</span>
+            </div>
+            <p className="text-[#64748B] font-inter text-sm mb-1 font-medium">Usuarios Registrados</p>
+            <h2 className="text-4xl font-bold text-[#1F2937] font-poppins">
+              {loading ? "..." : globalStats.totalUsuarios}
+            </h2>
+          </div>
+
         </div>
 
-        {/* Quick Actions */}
-        <div className="mt-8 card p-6">
-          <h3 className="font-poppins font-bold text-lg text-text-primary mb-4">
-            Acciones Rápidas
-          </h3>
-          <button
-            onClick={() => navigate('/admin/organizaciones/nueva')}
-            className="flex items-center gap-2 px-6 py-3 bg-[#0d9488] text-white rounded-lg
-                     hover:bg-[#0a7a73] transition-colors duration-200 font-inter font-semibold"
+        {/* Sección de Accesos Directos */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          
+          {/* Botón Principal de Navegación */}
+          <Link 
+            to="/ConsultaOrganizaciones"
+            className="flex items-center justify-between p-10 bg-[#22C55E] hover:bg-[#16A34A] rounded-[2.5rem] text-white shadow-xl shadow-green-100 transition-all group relative overflow-hidden"
           >
-            <Plus size={20} />
-            Nueva Organización
-          </button>
+            <div className="z-10">
+              <h3 className="text-2xl font-bold font-poppins mb-2">Gestionar Organizaciones</h3>
+              <p className="text-white/80 font-inter text-sm max-w-[250px]">
+                Consulta, registra y actualiza la información de todas las instituciones.
+              </p>
+            </div>
+            <div className="bg-white/20 p-4 rounded-full group-hover:translate-x-3 transition-transform z-10">
+              <ArrowRight className="w-8 h-8 text-white" />
+            </div>
+            {/* Círculo decorativo */}
+            <div className="absolute -right-10 -bottom-10 w-40 h-40 bg-white/10 rounded-full blur-3xl"></div>
+          </Link>
+
+          {/* Otros Accesos Secundarios */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <button className="flex flex-col items-center justify-center p-6 bg-white border border-[#E2E8F0] rounded-3xl hover:border-[#38BDF8] transition-colors group">
+              <Settings className="w-8 h-8 text-[#64748B] group-hover:text-[#38BDF8] mb-3 transition-colors" />
+              <span className="font-poppins font-bold text-[#1F2937] text-sm">Configuración</span>
+            </button>
+            <button className="flex flex-col items-center justify-center p-6 bg-white border border-[#E2E8F0] rounded-3xl hover:border-[#38BDF8] transition-colors group">
+              <LayoutDashboard className="w-8 h-8 text-[#64748B] group-hover:text-[#38BDF8] mb-3 transition-colors" />
+              <span className="font-poppins font-bold text-[#1F2937] text-sm">Reportes Globales</span>
+            </button>
+          </div>
+
         </div>
-      </main>
+
+      </div>
     </div>
   );
 };
