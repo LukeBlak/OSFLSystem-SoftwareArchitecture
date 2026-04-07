@@ -23,4 +23,6 @@ router.get('/postulations/me', authenticate, postulationController.getMyPostulat
 router.use('/projects/:proyectoId/postulations', postulationRoutes);
 router.use('/members/:memberId/horas', hoursRoutes);
 
+router.get('/postulations/me', authenticate, postulationController.getMyPostulations);
+
 export default router;
