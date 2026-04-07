@@ -9,17 +9,27 @@ import { logger } from '../utils/logger.js';
 export const createProject = async (supabase, projectData, organizationId) => {
   try {
     if (!projectData.nombre) throw ApiError.badRequest('El nombre del proyecto es requerido');
+    if (!organizationId) throw ApiError.badRequest('La organización del proyecto es requerida');
+
+    const fechaInicio = projectData.fechainicio ?? projectData.fecha_inicio ?? null;
+    const fechaFin = projectData.fechafin ?? projectData.fecha_fin ?? null;
+    const presupuestoAsignado = projectData.presupuestoasignado ?? projectData.presupuesto_asignado ?? 0;
+    const recomendacionHoras = projectData.recomendacionhoras ?? projectData.recomendacion_horas ?? 0;
+    const comiteId = projectData.comiteid ?? projectData.comiteId ?? null;
+
+    if (!fechaInicio) throw ApiError.badRequest('La fecha de inicio es requerida');
+    if (!fechaFin) throw ApiError.badRequest('La fecha de fin es requerida');
 
     // Mapear los datos al esquema de la base de datos
     const newProject = {
       nombre: projectData.nombre,
-      descripcion: projectData.descripcion,
+      descripcion: projectData.descripcion ?? null,
       cupos: projectData.cupos,
-      fechainicio: projectData.fechainicio,
-      fechafin: projectData.fechafin,
-      presupuestoasignado: projectData.presupuestoasignado || 0,
-      recomendacionhoras: projectData.recomendacionhoras,
-      comiteid: projectData.comiteid,
+      fechainicio: fechaInicio,
+      fechafin: fechaFin,
+      presupuestoasignado: presupuestoAsignado,
+      recomendacionhoras: recomendacionHoras,
+      comiteid: comiteId,
       organizacionid: organizationId
     };
 
@@ -30,7 +40,15 @@ export const createProject = async (supabase, projectData, organizationId) => {
       .single();
 
     if (error) {
-      logger.error('Error al crear proyecto', { error, projectData });
+      logger.error('Error al crear proyecto', {
+        error,
+        errorMessage: error?.message,
+        errorCode: error?.code,
+        errorDetails: error?.details,
+        errorHint: error?.hint,
+        projectData,
+        newProject,
+      });
       throw ApiError.internal('Error al crear el proyecto en Supabase');
     }
 

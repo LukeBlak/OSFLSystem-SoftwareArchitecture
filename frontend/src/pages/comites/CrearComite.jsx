@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FolderKanban, FileText, Target } from 'lucide-react';
+import authService from '../../services/authService';
+import { createCommittee } from '../../services/committeeService';
 
 const CrearComite = () => {
     const navigate = useNavigate();
@@ -13,14 +15,14 @@ const CrearComite = () => {
     const [loading, setLoading] = useState(false);
 
     const areasEnfoque = [
-        'Operaciones',
-        'Marketing',
-        'Administración',
-        'Educación',
-        'Salud',
-        'Medio Ambiente',
-        'Desarrollo Comunitario',
-        'Otros'
+        { value: 'logistica', label: 'Operaciones' },
+        { value: 'comunicacion', label: 'Marketing' },
+        { value: 'finanzas', label: 'Administración' },
+        { value: 'capacitacion', label: 'Educación' },
+        { value: 'proyectos', label: 'Salud' },
+        { value: 'eventos', label: 'Medio Ambiente' },
+        { value: 'alianzas', label: 'Desarrollo Comunitario' },
+        { value: 'otro', label: 'Otros' },
     ];
 
     const handleChange = (e) => {
@@ -52,7 +54,24 @@ const CrearComite = () => {
 
         setLoading(true);
         try {
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            const currentUser = authService.getUser();
+            const organizationId = currentUser?.organizationId
+                || currentUser?.organizacionId
+                || currentUser?.organization_id
+                || currentUser?.organizacion_id
+                || null;
+
+            if (!organizationId) {
+                throw new Error('No se pudo determinar la organización del usuario. Inicia sesión nuevamente.');
+            }
+
+            await createCommittee({
+                nombre: formData.nombre.trim(),
+                descripcion: formData.descripcion.trim(),
+                areaResponsabilidad: formData.areaEnfoque,
+                organizacionId: organizationId,
+            });
+
             alert('Comité creado exitosamente');
             navigate('/estructura/comites');
         } catch (error) {
@@ -131,7 +150,7 @@ const CrearComite = () => {
                             >
                                 <option value="">Seleccione un área</option>
                                 {areasEnfoque.map((area) => (
-                                    <option key={area} value={area}>{area}</option>
+                                    <option key={area.value} value={area.value}>{area.label}</option>
                                 ))}
                             </select>
                         </div>

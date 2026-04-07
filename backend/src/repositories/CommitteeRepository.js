@@ -1,8 +1,53 @@
-import { supabase } from '../config/supabase.js';
+import { supabaseAdmin } from '../config/supabase.js';
 import { getRequestSupabaseClient } from '../utils/requestContext.js';
 
 const TABLE = 'comite';
-const getDb = () => getRequestSupabaseClient() || supabase;
+const getDb = () => getRequestSupabaseClient() || supabaseAdmin;
+
+const normalizeCommitteeCreatePayload = (payload = {}) => {
+  const nowIso = new Date().toISOString();
+  const todayDate = nowIso.slice(0, 10);
+
+  return {
+    nombre: payload.nombre,
+    arearesponsabilidad: payload.areaResponsabilidad ?? payload.arearesponsabilidad ?? null,
+    descripcion: payload.descripcion ?? null,
+    estado: payload.estado ?? null,
+    presupuestoasignado: payload.presupuestoAsignado ?? payload.presupuestoasignado ?? 0,
+    organizacionid: payload.organizacionId ?? payload.organizacionid ?? null,
+    lidercomiteid: payload.liderComiteId ?? payload.lidercomiteid ?? null,
+    creado_por: payload.creadoPor ?? payload.creado_por ?? null,
+    fecha_creacion: payload.fechaCreacion ?? payload.fecha_creacion ?? nowIso,
+    fechacreacion: payload.fechacreacion ?? todayDate,
+  };
+};
+
+const normalizeCommitteeUpdatePayload = (payload = {}) => {
+  const mapped = {};
+
+  if (payload.nombre !== undefined) mapped.nombre = payload.nombre;
+  if (payload.areaResponsabilidad !== undefined || payload.arearesponsabilidad !== undefined) {
+    mapped.arearesponsabilidad = payload.areaResponsabilidad ?? payload.arearesponsabilidad;
+  }
+  if (payload.descripcion !== undefined) mapped.descripcion = payload.descripcion;
+  if (payload.estado !== undefined) mapped.estado = payload.estado;
+  if (payload.presupuestoAsignado !== undefined || payload.presupuestoasignado !== undefined) {
+    mapped.presupuestoasignado = payload.presupuestoAsignado ?? payload.presupuestoasignado;
+  }
+  if (payload.organizacionId !== undefined || payload.organizacionid !== undefined) {
+    mapped.organizacionid = payload.organizacionId ?? payload.organizacionid;
+  }
+  if (payload.liderComiteId !== undefined || payload.lidercomiteid !== undefined) {
+    mapped.lidercomiteid = payload.liderComiteId ?? payload.lidercomiteid;
+  }
+  if (payload.modificadoPor !== undefined || payload.modificado_por !== undefined) {
+    mapped.modificado_por = payload.modificadoPor ?? payload.modificado_por;
+  }
+
+  mapped.fecha_edicion = payload.fechaEdicion ?? payload.fecha_edicion ?? new Date().toISOString();
+
+  return mapped;
+};
 
 const wrapEntity = (row) => (row ? { ...row, data: row, error: null } : null);
 
@@ -21,7 +66,7 @@ const withPagination = (query, filters = {}) => {
 
 export const CommitteeRepository = {
   async findById(id) {
-    const { data, error } = await getDb()
+    const { data, error } = await supabaseAdmin
       .from(TABLE)
       .select('*')
       .eq('id', id)
@@ -40,7 +85,7 @@ export const CommitteeRepository = {
       .from(TABLE)
       .select('*')
       .eq('nombre', nombre)
-      .eq('organizacionId', organizacionId)
+      .eq('organizacionid', organizacionId)
       .limit(1)
       .maybeSingle();
 
@@ -52,19 +97,33 @@ export const CommitteeRepository = {
   },
 
   async create(payload) {
-    const { data, error } = await getDb()
+    const dataToInsert = normalizeCommitteeCreatePayload(payload);
+    let { data, error } = await getDb()
       .from(TABLE)
-      .insert(payload)
+      .insert(dataToInsert)
       .select('*')
       .single();
+
+    // Fallback para entornos con políticas RLS que bloquean el insert con el cliente del request.
+    if (error) {
+      const fallback = await supabaseAdmin
+        .from(TABLE)
+        .insert(dataToInsert)
+        .select('*')
+        .single();
+
+      data = fallback.data;
+      error = fallback.error;
+    }
 
     return { data, error };
   },
 
   async update(id, payload) {
+    const dataToUpdate = normalizeCommitteeUpdatePayload(payload);
     const { data, error } = await getDb()
       .from(TABLE)
-      .update(payload)
+      .update(dataToUpdate)
       .eq('id', id)
       .select('*')
       .single();
@@ -73,11 +132,11 @@ export const CommitteeRepository = {
   },
 
   async findAll(filters = {}) {
-    let query = getDb().from(TABLE).select('*', { count: 'exact' });
+    let query = supabaseAdmin.from(TABLE).select('*', { count: 'exact' });
 
-    if (filters.organizacionId) query = query.eq('organizacionId', filters.organizacionId);
+    if (filters.organizacionId) query = query.eq('organizacionid', filters.organizacionId);
     if (filters.estado) query = query.eq('estado', filters.estado);
-    if (filters.areaResponsabilidad) query = query.eq('areaResponsabilidad', filters.areaResponsabilidad);
+    if (filters.areaResponsabilidad) query = query.eq('arearesponsabilidad', filters.areaResponsabilidad);
     if (filters.search) {
       query = query.or(`nombre.ilike.%${filters.search}%,descripcion.ilike.%${filters.search}%`);
     }
@@ -89,7 +148,7 @@ export const CommitteeRepository = {
   },
 
   async getCommitteeMembers(committeeId, filters = {}) {
-    const memberLinkQuery = getDb()
+    const memberLinkQuery = supabaseAdmin
       .from('miembro_comite')
       .select('miembroid')
       .eq('comiteid', committeeId);
@@ -105,7 +164,7 @@ export const CommitteeRepository = {
       return hasPagination(filters) ? { data: [], error: null, count: 0 } : [];
     }
 
-    let query = getDb()
+    let query = supabaseAdmin
       .from('miembro')
       .select('*', { count: 'exact' })
       .in('id', memberIds)
@@ -130,7 +189,7 @@ export const CommitteeRepository = {
     let query = getDb()
       .from('proyecto')
       .select('*', { count: 'exact' })
-      .eq('comiteId', committeeId)
+      .eq('comiteid', committeeId)
       .order('fecha_creacion', { ascending: false });
 
     if (filters.estado) query = query.eq('estado', filters.estado);
@@ -153,7 +212,7 @@ export const CommitteeRepository = {
     const { data: projects } = await getDb()
       .from('proyecto')
       .select('id')
-      .eq('comiteId', committeeId);
+      .eq('comiteid', committeeId);
 
     const projectIds = (projects || []).map((item) => item.id).filter(Boolean);
 

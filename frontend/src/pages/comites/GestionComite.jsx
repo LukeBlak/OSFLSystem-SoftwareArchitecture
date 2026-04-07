@@ -1,6 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Users, UserPlus, UserMinus, Crown, ArrowLeft } from 'lucide-react';
+import {
+    addMemberToCommittee,
+    getCommitteeById,
+    getCommitteeMembers,
+    removeMemberFromCommittee,
+} from '../../services/committeeService';
+import { getMembers } from '../../services/memberService';
 
 const GestionComite = () => {
     const navigate = useNavigate();
@@ -12,6 +19,17 @@ const GestionComite = () => {
     const [selectedMiembros, setSelectedMiembros] = useState([]);
     const [loading, setLoading] = useState(true);
 
+    const mapMember = (rawMember, liderId = null) => {
+        const member = rawMember?.miembro || rawMember;
+        const memberId = member?.id || rawMember?.id || null;
+        return {
+            id: memberId,
+            nombre: member?.nombre || member?.name || 'Sin nombre',
+            correo: member?.email || member?.correo || 'Sin correo',
+            esLider: memberId === liderId,
+        };
+    };
+
     useEffect(() => {
         loadComiteData();
     }, [id]);
@@ -19,57 +37,88 @@ const GestionComite = () => {
     const loadComiteData = async () => {
         setLoading(true);
         try {
-            await new Promise(resolve => setTimeout(resolve, 500));
+            const [committeeResponse, membersResponse] = await Promise.all([
+                getCommitteeById(id),
+                getCommitteeMembers(id, { limit: 100 }),
+            ]);
+
+            const committeePayload = committeeResponse?.data?.committee || committeeResponse?.data || {};
+            const membersPayload = membersResponse?.data?.miembros
+                || membersResponse?.data?.members
+                || membersResponse?.data
+                || [];
+
+            const liderId = committeePayload.liderComiteId || committeePayload.lidercomiteid || null;
+
             setComite({
-                id: parseInt(id),
-                nombre: 'Logística',
-                descripcion: 'Coordinación de eventos y recursos',
-                areaEnfoque: 'Operaciones',
-                lider: 'Juan Pérez',
-                fechaCreacion: '2025-01-25'
+                id: committeePayload.id || id,
+                nombre: committeePayload.nombre || 'Sin nombre',
+                descripcion: committeePayload.descripcion || 'Sin descripción',
+                areaEnfoque: committeePayload.areaResponsabilidad || committeePayload.arearesponsabilidad || 'Sin área',
+                lider: committeePayload.lider?.nombre || 'No asignado',
+                organizacionId: committeePayload.organizacionId || committeePayload.organizacionid || null,
+                fechaCreacion: committeePayload.createdAt || committeePayload.fechaCreacion || committeePayload.fechacreacion || null,
             });
-            setMiembros([
-                { id: 1, nombre: 'Juan Pérez', correo: 'juan@esperanza.org', esLider: true },
-                { id: 2, nombre: 'Laura Sánchez', correo: 'laura@esperanza.org', esLider: false },
-                { id: 3, nombre: 'Carlos Ruiz', correo: 'carlos@esperanza.org', esLider: false }
-            ]);
-            setMiembrosDisponibles([
-                { id: 4, nombre: 'Ana López', correo: 'ana@esperanza.org' },
-                { id: 5, nombre: 'Pedro Díaz', correo: 'pedro@esperanza.org' },
-                { id: 6, nombre: 'Sofia Torres', correo: 'sofia@esperanza.org' }
-            ]);
+
+            const normalizedMembers = (Array.isArray(membersPayload) ? membersPayload : [])
+                .map((rawMember) => mapMember(rawMember, liderId))
+                .filter((member) => !!member.id);
+
+            setMiembros(normalizedMembers);
+
+            const membersResponseAll = await getMembers({
+                limit: 100,
+                organizacionId: committeePayload.organizacionId || committeePayload.organizacionid || null,
+            });
+
+            const allMembersPayload = membersResponseAll?.data?.members
+                || membersResponseAll?.data?.miembros
+                || membersResponseAll?.data
+                || [];
+
+            const assignedIds = new Set(normalizedMembers.map((member) => member.id));
+            const availableMembers = (Array.isArray(allMembersPayload) ? allMembersPayload : [])
+                .map((rawMember) => mapMember(rawMember, liderId))
+                .filter((member) => member.id && !assignedIds.has(member.id));
+
+            setMiembrosDisponibles(availableMembers);
         } catch (error) {
-            alert('Error al cargar datos del comité');
+            alert(error?.userMessage || error?.message || 'Error al cargar datos del comité');
         } finally {
             setLoading(false);
         }
     };
 
-    const handleAgregarMiembros = () => {
+    const handleAgregarMiembros = async () => {
         if (selectedMiembros.length === 0) {
             alert('Seleccione al menos un miembro');
             return;
         }
-        const nuevosMiembros = miembrosDisponibles
-            .filter(m => selectedMiembros.includes(m.id))
-            .map(m => ({ ...m, esLider: false }));
-        setMiembros([...miembros, ...nuevosMiembros]);
-        setMiembrosDisponibles(miembrosDisponibles.filter(m => !selectedMiembros.includes(m.id)));
-        setSelectedMiembros([]);
-        setShowAgregarModal(false);
-        alert('Miembros agregados exitosamente');
+        try {
+            await Promise.all(selectedMiembros.map((memberId) => addMemberToCommittee(id, memberId)));
+            setSelectedMiembros([]);
+            setShowAgregarModal(false);
+            await loadComiteData();
+            alert('Miembros agregados exitosamente');
+        } catch (error) {
+            alert(error?.userMessage || error?.message || 'Error al agregar miembros al comité');
+        }
     };
 
-    const handleRemoverMiembro = (miembroId) => {
+    const handleRemoverMiembro = async (miembroId) => {
         const miembro = miembros.find(m => m.id === miembroId);
         if (miembro.esLider) {
             alert('No se puede remover al líder del comité. Designe un nuevo líder primero.');
             return;
         }
         if (confirm(`¿Está seguro de remover a ${miembro.nombre} del comité?`)) {
-            setMiembros(miembros.filter(m => m.id !== miembroId));
-            setMiembrosDisponibles([...miembrosDisponibles, miembro]);
-            alert('Miembro removido exitosamente');
+            try {
+                await removeMemberFromCommittee(id, miembroId);
+                await loadComiteData();
+                alert('Miembro removido exitosamente');
+            } catch (error) {
+                alert(error?.userMessage || error?.message || 'Error al remover miembro del comité');
+            }
         }
     };
 

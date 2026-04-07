@@ -29,6 +29,65 @@ import { StatusCodes } from 'http-status-codes';
 import committeeService from '../services/committee.service.js';
 import { ApiError } from '../utils/apiError.js';
 import { ApiResponse } from '../utils/apiResponse.js';
+import { supabaseAdmin } from '../config/supabase.js';
+
+const resolveOrganizationIdForUser = async (user) => {
+  const direct = user?.organizationId
+    || user?.organizacionId
+    || user?.organization_id
+    || user?.organizacion_id
+    || null;
+
+  if (direct) return direct;
+
+  if (user?.id) {
+    const { data, error } = await supabaseAdmin
+      .from('lider_organizacion')
+      .select('organizacionid')
+      .eq('id', user.id)
+      .limit(1)
+      .maybeSingle();
+
+    if (!error && data?.organizacionid) {
+      return data.organizacionid;
+    }
+
+    // Fallback: líderes de comité pueden derivar su asociación desde comite.lidercomiteid
+    const { data: liderComiteRecord, error: liderComiteError } = await supabaseAdmin
+      .from('comite')
+      .select('organizacionid')
+      .eq('lidercomiteid', user.id)
+      .limit(1)
+      .maybeSingle();
+
+    if (!liderComiteError && liderComiteRecord?.organizacionid) {
+      return liderComiteRecord.organizacionid;
+    }
+
+    // Fallback: miembros pueden derivar su asociación por vínculo miembro_comite -> comite
+    const { data: memberCommittee, error: memberCommitteeError } = await supabaseAdmin
+      .from('miembro_comite')
+      .select('comiteid')
+      .eq('miembroid', user.id)
+      .limit(1)
+      .maybeSingle();
+
+    if (!memberCommitteeError && memberCommittee?.comiteid) {
+      const { data: committee, error: committeeError } = await supabaseAdmin
+        .from('comite')
+        .select('organizacionid')
+        .eq('id', memberCommittee.comiteid)
+        .limit(1)
+        .maybeSingle();
+
+      if (!committeeError && committee?.organizacionid) {
+        return committee.organizacionid;
+      }
+    }
+  }
+
+  return null;
+};
 
 // =============================================================================
 // FUNCIONES DEL CONTROLADOR
@@ -114,11 +173,14 @@ export const createCommittee = async (req, res, next) => {
     // =========================================================================
     // 2. VALIDAR CAMPOS REQUERIDOS
     // =========================================================================
-    if (!nombre || !organizacionId) {
+    const effectiveOrganizationId = organizacionId || await resolveOrganizationIdForUser(req.user);
+    const creatorUserId = req.user?.id || req.authContext?.userId || null;
+
+    if (!nombre || !effectiveOrganizationId) {
       throw ApiError.badRequest('Nombre y organización son requeridos', {
         missingFields: {
           nombre: !nombre,
-          organizacionId: !organizacionId,
+          organizacionId: !effectiveOrganizationId,
         },
       });
     }
@@ -150,9 +212,9 @@ export const createCommittee = async (req, res, next) => {
       descripcion,
       estado: estado || 'activo',
       presupuestoAsignado: presupuestoAsignado || 0,
-      organizacionId,
+      organizacionId: effectiveOrganizationId,
       liderComiteId,
-      creadoPor: req.user.id,
+      creadoPor: creatorUserId,
     });
 
     // =========================================================================
@@ -171,6 +233,7 @@ export const createCommittee = async (req, res, next) => {
             presupuestoAsignado: committee.presupuestoAsignado,
             organizacionId: committee.organizacionId,
             liderComiteId: committee.liderComiteId,
+            creadoPor: committee.creadoPor,
             createdAt: committee.fechaCreacion,
           },
         },
@@ -239,6 +302,9 @@ export const getAllCommittees = async (req, res, next) => {
       limit = '10',
     } = req.query;
 
+    const userOrganizationId = req.user?.organizationId || await resolveOrganizationIdForUser(req.user);
+    const resolvedOrganizationId = organizacionId || userOrganizationId;
+
     // =========================================================================
     // 2. VALIDAR PARÁMETROS DE PAGINACIÓN
     // =========================================================================
@@ -253,11 +319,19 @@ export const getAllCommittees = async (req, res, next) => {
       throw ApiError.badRequest('El límite debe estar entre 1 y 100');
     }
 
+    if (!resolvedOrganizationId) {
+      throw ApiError.badRequest('La consulta de comités requiere una organización válida');
+    }
+
+    if (organizacionId && userOrganizationId && organizacionId !== userOrganizationId) {
+      throw ApiError.forbidden('No tienes permisos para consultar comités de otra asociación');
+    }
+
     // =========================================================================
     // 3. PREPARAR FILTROS DE BÚSQUEDA
     // =========================================================================
     const filters = {
-      organizacionId: organizacionId || null,
+      organizacionId: resolvedOrganizationId,
       estado: estado || null,
     };
 
@@ -683,7 +757,7 @@ export const assignLeader = async (req, res, next) => {
       );
     }
 
-    const committee = await committeeService.assignLeader(req.supabase, id, liderComiteId, {
+    const committee = await committeeService.assignLeader(supabaseAdmin, id, liderComiteId, {
       assignedBy: req.user.id,
     });
 
@@ -716,7 +790,7 @@ export const addMember = async (req, res, next) => {
 
     if (!miembroId) throw ApiError.badRequest('ID del miembro es requerido');
 
-    const result = await committeeService.addMemberToCommittee(req.supabase, id, miembroId, {
+    const result = await committeeService.addMemberToCommittee(supabaseAdmin, id, miembroId, {
       assignedBy: req.user.id
     });
 
@@ -737,7 +811,7 @@ export const removeMember = async (req, res, next) => {
   try {
     const { id, memberId } = req.params;
 
-    await committeeService.removeMemberFromCommittee(req.supabase, id, memberId, {
+    await committeeService.removeMemberFromCommittee(supabaseAdmin, id, memberId, {
       removedBy: req.user.id
     });
 

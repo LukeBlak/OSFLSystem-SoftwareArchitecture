@@ -176,7 +176,7 @@ const Navbar = () => {
                   </button>
                   <button
                     onClick={() => {
-                      navigate('/estructura/comites/1/gestion');
+                      navigate('/estructura/comites');
                       setShowEstructuraMenu(false);
                     }}
                     className="w-full text-left px-4 py-2 text-text-primary font-inter hover:bg-gray-50 transition-colors flex items-center gap-2"

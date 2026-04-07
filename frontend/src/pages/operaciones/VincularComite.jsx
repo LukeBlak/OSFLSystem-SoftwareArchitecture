@@ -4,6 +4,7 @@ import NavbarInner from '../../components/NavbarInner';
 import { Users, Leaf, GraduationCap, Heart, Building2, Check } from 'lucide-react';
 import { getProjects, assignCommittee } from '../../services/projectService';
 import { getCommittees } from '../../services/committeeService';
+import authService from '../../services/authService';
 
 const VincularComite = () => {
   const navigate = useNavigate();
@@ -71,7 +72,17 @@ const VincularComite = () => {
 
   const loadProjects = async () => {
     try {
-      const response = await getProjects({ limit: 100 });
+      const currentUser = authService.getUser();
+      const organizationId = currentUser?.organizationId
+        || currentUser?.organizacionId
+        || currentUser?.organization_id
+        || currentUser?.organizacion_id
+        || undefined;
+
+      const response = await getProjects({
+        limit: 100,
+        organizacionid: organizationId,
+      });
       const items = normalizeProjects(response);
       setProjects(items);
 
@@ -87,7 +98,17 @@ const VincularComite = () => {
 
   const loadCommittees = async () => {
     try {
-      const response = await getCommittees({ limit: 100 });
+      const currentUser = authService.getUser();
+      const organizationId = currentUser?.organizationId
+        || currentUser?.organizacionId
+        || currentUser?.organization_id
+        || currentUser?.organizacion_id
+        || null;
+
+      const response = await getCommittees({
+        limit: 100,
+        organizacionId: organizationId || undefined,
+      });
       setCommittees(normalizeCommittees(response));
     } catch (apiError) {
       setError(apiError.userMessage || apiError.message || 'No se pudieron cargar los comités');

@@ -4,6 +4,7 @@ import NavbarInner from '../../components/NavbarInner';
 import { Calendar, CheckCircle2, ClipboardList, FolderKanban, Leaf, GraduationCap, Heart, Building2, ChevronRight, AlertCircle } from 'lucide-react';
 import { createProject } from '../../services/projectService';
 import { getCommittees } from '../../services/committeeService';
+import authService from '../../services/authService';
 
 const PlanificarProyecto = () => {
   const navigate = useNavigate();
@@ -52,7 +53,17 @@ const PlanificarProyecto = () => {
   const loadCommittees = async () => {
     setLoadingCommittees(true);
     try {
-      const response = await getCommittees({ limit: 100 });
+      const currentUser = authService.getUser();
+      const organizationId = currentUser?.organizationId
+        || currentUser?.organizacionId
+        || currentUser?.organization_id
+        || currentUser?.organizacion_id
+        || null;
+
+      const response = await getCommittees({
+        limit: 100,
+        organizacionId: organizationId || undefined,
+      });
       setCommittees(normalizeCommittees(response));
     } catch (apiError) {
       setError(apiError.userMessage || apiError.message || 'No se pudieron cargar los comités');

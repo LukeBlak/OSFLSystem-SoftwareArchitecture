@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, Filter, Plus, Users, FolderKanban } from 'lucide-react';
 import { getCommittees } from '../../services/committeeService';
+import authService from '../../services/authService';
 
 const ConsultaComites = () => {
     const navigate = useNavigate();
@@ -17,7 +18,17 @@ const ConsultaComites = () => {
     const loadComites = async () => {
         setLoading(true);
         try {
-            const response = await getCommittees({ limit: 100 });
+            const currentUser = authService.getUser();
+            const organizationId = currentUser?.organizationId
+                || currentUser?.organizacionId
+                || currentUser?.organization_id
+                || currentUser?.organizacion_id
+                || null;
+
+            const response = await getCommittees({
+                limit: 100,
+                organizacionId: organizationId || undefined,
+            });
     
             const items = Array.isArray(response?.data)
                 ? response.data

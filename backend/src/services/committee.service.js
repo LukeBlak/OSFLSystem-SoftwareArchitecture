@@ -28,6 +28,7 @@
 import { ApiError } from '../utils/apiError.js';
 import { StatusCodes } from 'http-status-codes';
 import { logger } from '../utils/logger.js';
+import { supabaseAdmin } from '../config/supabase.js';
 import { CommitteeRepository } from '../repositories/CommitteeRepository.js';
 import { OrganizationRepository } from '../repositories/OrganizationRepository.js';
 import { MemberRepository } from '../repositories/MemberRepository.js';
@@ -112,9 +113,14 @@ export const createCommittee = async (committeeData) => {
     // =========================================================================
     // 2. VERIFICAR QUE LA ORGANIZACIÓN EXISTE
     // =========================================================================
-    const organization = await OrganizationRepository.findById(validData.organizacionId);
+    const { data: organization, error: organizationError } = await supabaseAdmin
+      .from('organizacion')
+      .select('id')
+      .eq('id', validData.organizacionId)
+      .limit(1)
+      .maybeSingle();
 
-    if (!organization) {
+    if (organizationError || !organization) {
       throw ApiError.notFound('Organización no encontrada');
     }
 
@@ -162,6 +168,8 @@ export const createCommittee = async (committeeData) => {
       organizacionId: validData.organizacionId,
       liderComiteId: validData.liderComiteId || null,
       creadoPor: committeeData.creadoPor,
+      fechaCreacion: new Date().toISOString(),
+      fechacreacion: new Date().toISOString().slice(0, 10),
     };
 
     // =========================================================================
@@ -172,6 +180,10 @@ export const createCommittee = async (committeeData) => {
     if (error || !committee) {
       logger.error('Error al crear comité', {
         error,
+        errorMessage: error?.message,
+        errorCode: error?.code,
+        errorDetails: error?.details,
+        errorHint: error?.hint,
         organizacionId: validData.organizacionId,
         nombre: validData.nombre,
       });
@@ -945,6 +957,8 @@ export default {
   updateCommittee,
   deactivateCommittee,
   assignLeader,
+  addMemberToCommittee,
+  removeMemberFromCommittee,
   getCommitteeStats,
   getCommitteeMembers,
   getCommitteeProjects,
