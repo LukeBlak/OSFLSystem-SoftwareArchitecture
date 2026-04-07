@@ -942,8 +942,12 @@ export const getFinancialSummary = async (organizacionId, fechaDesde, fechaHasta
     }
 
     const organizationId = currentUser.role === USER_ROLES.LIDER_ORGANIZACION
-      ? currentUser.organizationId
+      ? await resolveOrganizationIdForUser(currentUser)
       : organizacionId || null;
+
+    if (!organizationId) {
+      throw ApiError.badRequest('No se pudo identificar la organización del usuario');
+    }
 
     const entries = await loadFinancialEntries({ organizationId });
 

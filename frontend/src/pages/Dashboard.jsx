@@ -18,17 +18,29 @@ import {
   Settings
 } from 'lucide-react';
 
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+
+const resolveOrganizationId = (user) => (
+  user?.organizationId
+    || user?.organizacionId
+    || user?.organization_id
+    || user?.organizacion_id
+    || user?.profile?.organizationId
+    || user?.profile?.organizacionId
+    || user?.profile?.organization_id
+    || user?.profile?.organizacion_id
+    || user?.user_metadata?.organizationId
+    || user?.user_metadata?.organizacionId
+    || user?.user_metadata?.organization_id
+    || user?.user_metadata?.organizacion_id
+    || ''
+);
+
 const Dashboard = () => {
   const navigate = useNavigate();
   const currentUser = authService.getUser();
   const role = String(currentUser?.role || '').toLowerCase();
-  const [organizationId, setOrganizationId] = useState(
-    currentUser?.organizationId
-      || currentUser?.organizacionId
-      || currentUser?.organization_id
-      || currentUser?.organizacion_id
-      || ''
-  );
+  const [organizationId, setOrganizationId] = useState(resolveOrganizationId(currentUser));
   const [statsValues, setStatsValues] = useState({
     activeProjects: 0,
     volunteers: 0,
@@ -45,11 +57,21 @@ const Dashboard = () => {
     let nextOrganizationId = organizationId;
     if (!nextOrganizationId) {
       const sessionUser = await authService.checkSession();
-      nextOrganizationId = sessionUser?.organizationId
-        || sessionUser?.organizacionId
-        || sessionUser?.organization_id
-        || sessionUser?.organizacion_id
-        || '';
+      nextOrganizationId = resolveOrganizationId(sessionUser);
+
+      if (!nextOrganizationId) {
+        const profileResponse = await fetch(`${API_URL}/profile`, {
+          method: 'GET',
+          headers: authService.authHeaders(),
+        });
+
+        if (profileResponse.ok) {
+          const profilePayload = await profileResponse.json().catch(() => ({}));
+          nextOrganizationId = profilePayload?.data?.profile?.organizationId
+            || profilePayload?.data?.profile?.organization_id
+            || '';
+        }
+      }
 
       if (nextOrganizationId && nextOrganizationId !== organizationId) {
         setOrganizationId(nextOrganizationId);

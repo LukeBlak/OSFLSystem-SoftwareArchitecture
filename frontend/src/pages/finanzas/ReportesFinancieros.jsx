@@ -5,10 +5,28 @@ import { FileText, Download, Calendar, PieChart, BarChart3, FileSpreadsheet, Pri
 import { getFinancialSummary, listTransactions } from '../../services/financeService';
 import authService from '../../services/authService';
 
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+
+const resolveOrganizationId = (user) => (
+  user?.organizationId
+  || user?.organizacionId
+  || user?.organization_id
+  || user?.organizacion_id
+  || user?.profile?.organizationId
+  || user?.profile?.organizacionId
+  || user?.profile?.organization_id
+  || user?.profile?.organizacion_id
+  || user?.user_metadata?.organizationId
+  || user?.user_metadata?.organizacionId
+  || user?.user_metadata?.organization_id
+  || user?.user_metadata?.organizacion_id
+  || ''
+);
+
 const ReportesFinancieros = () => {
   const navigate = useNavigate();
   const currentUser = authService.getUser();
-  const [organizationId, setOrganizationId] = useState(currentUser?.organizationId || currentUser?.organizacionId || '');
+  const [organizationId, setOrganizationId] = useState(resolveOrganizationId(currentUser));
 
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
@@ -21,28 +39,46 @@ const ReportesFinancieros = () => {
   const [transactions, setTransactions] = useState([]);
 
   useEffect(() => {
-    const hydrateOrganizationId = async () => {
-      if (organizationId) return;
-
-      const sessionUser = await authService.checkSession();
-      const fallbackOrganizationId = sessionUser?.organizationId || sessionUser?.organizacionId || '';
-      if (fallbackOrganizationId) {
-        setOrganizationId(fallbackOrganizationId);
-      }
-    };
-
-    hydrateOrganizationId();
     loadReportData();
-  }, [organizationId]);
+  }, []);
 
   const loadReportData = async () => {
     setLoading(true);
     setError('');
 
     try {
+      let resolvedOrganizationId = organizationId;
+
+      if (!resolvedOrganizationId) {
+        const sessionUser = await authService.checkSession();
+        resolvedOrganizationId = resolveOrganizationId(sessionUser);
+
+        if (!resolvedOrganizationId) {
+          const profileResponse = await fetch(`${API_URL}/profile`, {
+            method: 'GET',
+            headers: authService.authHeaders(),
+          });
+
+          if (profileResponse.ok) {
+            const profilePayload = await profileResponse.json().catch(() => ({}));
+            resolvedOrganizationId = profilePayload?.data?.profile?.organizationId
+              || profilePayload?.data?.profile?.organization_id
+              || '';
+          }
+        }
+
+        if (resolvedOrganizationId && resolvedOrganizationId !== organizationId) {
+          setOrganizationId(resolvedOrganizationId);
+        }
+      }
+
+      if (!resolvedOrganizationId) {
+        throw new Error('No se pudo resolver la organización para cargar el reporte');
+      }
+
       const [summaryResponse, transactionsResponse] = await Promise.all([
-        organizationId ? getFinancialSummary({ organizacionId: organizationId }) : Promise.resolve(null),
-        organizationId ? listTransactions({ organizacionId: organizationId, limit: 200 }) : Promise.resolve(null),
+        getFinancialSummary({ organizacionId: resolvedOrganizationId }),
+        listTransactions({ organizacionId: resolvedOrganizationId, limit: 200 }),
       ]);
 
       setSummary(summaryResponse?.data?.summary || summaryResponse?.summary || summaryResponse?.data || null);
@@ -238,7 +274,7 @@ const ReportesFinancieros = () => {
                 </label>
                 <div className="block">
                   <span className="block font-poppins font-semibold text-[#1f2937] mb-2">Organización</span>
-                  <div className="input-field bg-[#f8faf9] flex items-center gap-2 text-[#64748b]"><Clock size={16} />{organizationId || 'No disponible'}</div>
+                  <div className="input-field bg-[#f8faf9] flex items-center gap-2 text-[#64748b]"><Clock size={16} />{organizationId || (loading ? 'Resolviendo...' : 'No disponible')}</div>
                 </div>
               </div>
 
