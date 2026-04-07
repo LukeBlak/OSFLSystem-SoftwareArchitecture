@@ -1,14 +1,18 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { User, LogOut, ChevronDown, ArrowLeft } from 'lucide-react';
+import authService from '../services/authService';
 
 const NavbarInner = ({ title = "Planificar Nuevo Proyecto", subtitle = "Crea un nuevo proyecto de voluntariado" }) => {
   const navigate = useNavigate();
   const [showProfileMenu, setShowProfileMenu] = useState(false);
 
-  const handleLogout = () => {
-    alert('Sesión cerrada');
-    navigate('/');
+  const handleLogout = async () => {
+    try {
+      await authService.logout();
+    } finally {
+      navigate('/login', { replace: true });
+    }
   };
 
   const handleGoBack = () => {

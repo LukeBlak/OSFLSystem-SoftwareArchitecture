@@ -1,4 +1,4 @@
-import { supabase } from '../config/supabase.js';
+import { supabase, supabaseAdmin } from '../config/supabase.js';
 import { getRequestSupabaseClient } from '../utils/requestContext.js';
 
 const TABLE = 'organizacion';
@@ -72,18 +72,38 @@ export const OrganizationRepository = {
   },
 
   async findAll(filters = {}) {
-    let query = getDb().from(TABLE).select('*', { count: 'exact' });
+    const buildListQuery = (effectiveFilters = {}) => {
+      let query = supabaseAdmin.from(TABLE).select('*', { count: 'exact' });
 
-    if (filters.tipo) query = query.eq('tipo', filters.tipo);
-    if (filters.estado) query = query.eq('estado', filters.estado);
-    if (filters.search) {
-      query = query.or(`nombre.ilike.%${filters.search}%,descripcion.ilike.%${filters.search}%`);
+      if (effectiveFilters.tipo) query = query.eq('tipo', effectiveFilters.tipo);
+      if (effectiveFilters.estado) query = query.eq('estado', effectiveFilters.estado);
+      if (effectiveFilters.search) {
+        query = query.or(`nombre.ilike.%${effectiveFilters.search}%,descripcion.ilike.%${effectiveFilters.search}%`);
+      }
+
+      return withPagination(query, effectiveFilters).order('fecha_creacion', { ascending: false });
+    };
+
+    const executeListQuery = async (effectiveFilters = {}) => {
+      const { data, error, count } = await buildListQuery(effectiveFilters);
+      return { data: data || [], error, count: count || 0 };
+    };
+
+    const firstAttempt = await executeListQuery(filters);
+
+    if (!firstAttempt.error) {
+      return firstAttempt;
     }
 
-    query = withPagination(query, filters).order('fecha_creacion', { ascending: false });
+    const isUndefinedColumn = String(firstAttempt.error?.code || '') === '42703';
+    const referencesEstado = String(firstAttempt.error?.message || '').toLowerCase().includes('estado');
 
-    const { data, error, count } = await query;
-    return { data: data || [], error, count: count || 0 };
+    if (filters.estado && isUndefinedColumn && referencesEstado) {
+      const { estado, ...filtersWithoutEstado } = filters;
+      return executeListQuery(filtersWithoutEstado);
+    }
+
+    return firstAttempt;
   },
 
   async getOrganizationMembers(organizationId, filters = {}) {

@@ -157,17 +157,17 @@ const registerHoursLimiter = rateLimit({
  */
 const canManageMembers = [
   authenticate,
-  requireRole([ROLES.LIDER_ORGANIZACION]),
+  requireRole([ROLES.ADMIN, ROLES.SUPER_ADMIN, ROLES.LIDER_ORGANIZACION]),
 ];
 
 /**
  * Middleware para verificar permisos de lectura de miembros
  * 
- * Roles permitidos: todos los usuarios autenticados
+ * Roles permitidos: admin, super_admin, lider_organizacion, lider_comite
  */
 const canViewMembers = [
   authenticate,
-  requireRole([ROLES.LIDER_ORGANIZACION, ROLES.LIDER_COMITE]),
+  requireRole([ROLES.ADMIN, ROLES.SUPER_ADMIN, ROLES.LIDER_ORGANIZACION, ROLES.LIDER_COMITE]),
 ];
 
 /**

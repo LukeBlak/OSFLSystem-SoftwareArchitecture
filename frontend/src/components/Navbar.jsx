@@ -17,11 +17,12 @@ const Navbar = () => {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showEstructuraMenu, setShowEstructuraMenu] = useState(false);
 
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    alert('Sesión cerrada');
-    navigate('/login');
+  const handleLogout = async () => {
+    try {
+      await authService.logout();
+    } finally {
+      navigate('/login', { replace: true });
+    }
   };
 
   const isActive = (path) => location.pathname.startsWith(path);
