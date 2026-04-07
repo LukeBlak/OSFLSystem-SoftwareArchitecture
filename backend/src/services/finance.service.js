@@ -146,6 +146,7 @@ export const registerIncome = async (incomeData, currentUser, supabaseClient) =>
       USER_ROLES.ADMIN,
       USER_ROLES.SUPER_ADMIN,
       USER_ROLES.LIDER_ORGANIZACION,
+      USER_ROLES.LIDER_COMITE,
     ];
 
     if (!allowedRoles.includes(currentUser.role)) {
@@ -300,6 +301,7 @@ export const registerExpense = async (expenseData, currentUser, supabaseClient) 
       USER_ROLES.ADMIN,
       USER_ROLES.SUPER_ADMIN,
       USER_ROLES.LIDER_ORGANIZACION,
+      USER_ROLES.LIDER_COMITE,
     ];
 
     if (!allowedRoles.includes(currentUser.role)) {
@@ -458,7 +460,7 @@ export const registerExpense = async (expenseData, currentUser, supabaseClient) 
  * CONSULTAR DISPONIBILIDAD EN CAJA (CU-22)
  * =============================================================================
  */
-export const getBalance = async (organizacionId, currentUser, options = {}) => {
+export const getBalance = async (organizacionId, currentUser, supabaseClient, options = {}) => {
   try {
     const { fechaCorte = null } = options;
 
@@ -469,6 +471,7 @@ export const getBalance = async (organizacionId, currentUser, options = {}) => {
       USER_ROLES.ADMIN,
       USER_ROLES.SUPER_ADMIN,
       USER_ROLES.LIDER_ORGANIZACION,
+      USER_ROLES.LIDER_COMITE,
     ];
 
     if (!allowedRoles.includes(currentUser.role)) {

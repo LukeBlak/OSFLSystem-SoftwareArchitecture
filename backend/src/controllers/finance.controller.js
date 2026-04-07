@@ -79,8 +79,13 @@ export const getBalance = async (req, res, next) => {
   try {
     const { organizacionId } = req.params;
     const { fechaCorte } = req.query;
-    const balance = await financeService.getBalance(organizacionId, req.user, { fechaCorte });
-
+    const balance = await financeService.getBalance(
+      organizacionId,
+      req.user,
+      req.supabase,
+      { fechaCorte }
+    );
+    
     return res.status(StatusCodes.OK).json(
       new ApiResponse(
         StatusCodes.OK,
