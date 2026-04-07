@@ -26,12 +26,22 @@ const router = Router();
 // Middleware de roles para finanzas
 const canManageFinance = [
   authenticate,
-  requireRole([ROLES.LIDER_ORGANIZACION, ROLES.LIDER_COMITE]),
+  requireRole([
+    ROLES.ADMIN,
+    ROLES.SUPER_ADMIN,
+    ROLES.LIDER_ORGANIZACION,
+    ROLES.LIDER_COMITE,
+  ]),
 ];
 
 const canViewFinance = [
   authenticate,
-  requireRole([ROLES.ADMIN, ROLES.LIDER_ORGANIZACION, ROLES.LIDER_COMITE, ROLES.MIEMBRO]),
+  requireRole([
+    ROLES.ADMIN,
+    ROLES.SUPER_ADMIN,
+    ROLES.LIDER_ORGANIZACION,
+    ROLES.LIDER_COMITE,
+  ]),
 ];
 
 /**

@@ -144,12 +144,12 @@ export const validate = (schema, options = {}) => {
       let validationSchema = schema;
       
       // Aplicar transformaciones según opciones
-      if (partial) {
-        validationSchema = schema.partial();
+      if (partial && typeof validationSchema?.partial === 'function') {
+        validationSchema = validationSchema.partial();
       }
       
-      if (stripUnknown) {
-        validationSchema = schema.strip();
+      if (stripUnknown && typeof validationSchema?.strip === 'function') {
+        validationSchema = validationSchema.strip();
       }
 
       const result = validationSchema.safeParse(dataToValidate);
@@ -202,13 +202,15 @@ export const validate = (schema, options = {}) => {
          */
         const apiError = ApiError.validation(
           validationError.message,
-          result.error.errors.map(err => ({
-            field: err.path.join('.') || 'root',
-            message: err.message,
-            code: err.code,
-            expected: err.expected,
-            received: err.received,
-          }))
+          {
+            errors: result.error.errors.map(err => ({
+              field: err.path.join('.') || 'root',
+              message: err.message,
+              code: err.code,
+              expected: err.expected,
+              received: err.received,
+            })),
+          }
         );
 
         return next(apiError);

@@ -29,6 +29,48 @@ import { StatusCodes } from 'http-status-codes';
 import memberService from '../services/member.service.js';
 import { ApiError } from '../utils/apiError.js';
 import { ApiResponse } from '../utils/apiResponse.js';
+import { supabaseAdmin } from '../config/supabase.js';
+
+const resolveOrganizationIdForUser = async (userId, email) => {
+  if (!userId && !email) return null;
+
+  // Esquema real: lider_organizacion(id -> usuario.id, organizacionid -> organizacion.id)
+  const { data: liderOrganizacion, error: liderOrgError } = await supabaseAdmin
+    .from('lider_organizacion')
+    .select('organizacionid')
+    .eq('id', userId)
+    .limit(1)
+    .maybeSingle();
+
+  if (!liderOrgError && liderOrganizacion?.organizacionid) {
+    return liderOrganizacion.organizacionid;
+  }
+
+  // Fallback por email: auth user -> usuario(id) -> lider_organizacion(id)
+  if (email) {
+    const { data: usuarioPorEmail, error: usuarioEmailError } = await supabaseAdmin
+      .from('usuario')
+      .select('id')
+      .eq('email', email)
+      .limit(1)
+      .maybeSingle();
+
+    if (!usuarioEmailError && usuarioPorEmail?.id) {
+      const { data: liderPorUsuarioId, error: liderPorUsuarioError } = await supabaseAdmin
+        .from('lider_organizacion')
+        .select('organizacionid')
+        .eq('id', usuarioPorEmail.id)
+        .limit(1)
+        .maybeSingle();
+
+      if (!liderPorUsuarioError && liderPorUsuarioId?.organizacionid) {
+        return liderPorUsuarioId.organizacionid;
+      }
+    }
+  }
+
+  return null;
+};
 
 // =============================================================================
 // FUNCIONES DEL CONTROLADOR
@@ -121,7 +163,6 @@ export const registerMember = async (req, res, next) => {
       dui: !dui || dui.trim() === '',
       nombre: !nombre || nombre.trim() === '',
       email: !email || email.trim() === '',
-      organizacionId: !organizacionId,
     };
 
     const missingFields = Object.entries(requiredFields)
@@ -131,7 +172,7 @@ export const registerMember = async (req, res, next) => {
     if (missingFields.length > 0) {
       throw ApiError.badRequest('Campos requeridos faltantes', {
         missingFields,
-        requiredFields: ['dui', 'nombre', 'email', 'organizacionId'],
+        requiredFields: ['dui', 'nombre', 'email'],
       });
     }
 
@@ -155,6 +196,17 @@ export const registerMember = async (req, res, next) => {
       );
     }
 
+    const effectiveOrganizationId = organizacionId
+      || req.user.organizationId
+      || req.user.organizacionId
+      || req.user.organization_id
+      || req.user.organizacion_id
+      || await resolveOrganizationIdForUser(req.user.id, req.user.email);
+
+    if (!effectiveOrganizationId) {
+      throw ApiError.badRequest('No se pudo determinar la organizacion para registrar el miembro');
+    }
+
     // =========================================================================
     // 5. LLAMAR AL SERVICIO DE REGISTRO
     // =========================================================================
@@ -170,8 +222,9 @@ export const registerMember = async (req, res, next) => {
       telefono,
       fechanacimiento,
       direccion,
-      organizacionId,
+      organizacionId: effectiveOrganizationId,
       registradoPor: req.user.id,
+      registradorEmail: req.user.email,
     });
 
     // =========================================================================
@@ -267,6 +320,14 @@ export const getAllMembers = async (req, res, next) => {
     // =========================================================================
     const pageNum = parseInt(page, 10);
     const limitNum = parseInt(limit, 10);
+    let effectiveOrganizationId = organizacionId
+      || req.user.organizationId
+      || req.user.organizacionId
+      || null;
+
+    if (!effectiveOrganizationId) {
+      effectiveOrganizationId = await resolveOrganizationIdForUser(req.user.id, req.user.email);
+    }
 
     if (isNaN(pageNum) || pageNum < 1) {
       throw ApiError.badRequest('El número de página debe ser mayor a 0');
@@ -280,7 +341,7 @@ export const getAllMembers = async (req, res, next) => {
     // 3. PREPARAR FILTROS DE BÚSQUEDA
     // =========================================================================
     const filters = {
-      organizacionId: organizacionId || null,
+      organizacionId: effectiveOrganizationId,
       estadoActivo: estadoActivo !== undefined ? estadoActivo === 'true' : null,
       search: search || null,
     };
@@ -291,23 +352,12 @@ export const getAllMembers = async (req, res, next) => {
     };
 
     // =========================================================================
-    // 4. VALIDAR PERMISOS DE ACCESO
-    // =========================================================================
-    // Los usuarios solo pueden ver miembros de su propia organización
-    // excepto los administradores
-    if (req.user.role !== 'admin' && !organizacionId) {
-      throw ApiError.forbidden(
-        'Debes especificar una organización para consultar miembros'
-      );
-    }
-
-    // =========================================================================
-    // 5. LLAMAR AL SERVICIO DE OBTENCIÓN
+    // 4. LLAMAR AL SERVICIO DE OBTENCIÓN
     // =========================================================================
     const result = await memberService.getAllMembers(filters, pagination, req.user);
 
     // =========================================================================
-    // 6. RETORNAR RESPUESTA EXITOSA
+    // 5. RETORNAR RESPUESTA EXITOSA
     // =========================================================================
     return res.status(StatusCodes.OK).json(
       new ApiResponse(

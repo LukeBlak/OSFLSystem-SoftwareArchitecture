@@ -1,24 +1,42 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import NavbarInner from '../../components/NavbarInner';
 import { Clock, Calendar, FolderKanban, Award, TrendingUp, Download, User, CheckCircle, BarChart3, FileText } from 'lucide-react';
-import { getMyHistory } from '../../services/hoursService';
+import { getHoursHistory } from '../../services/hoursService';
 import authService from '../../services/authService';
 
 const normalizeHistory = (response) => {
   const payload = response?.data || {};
   const records = Array.isArray(payload.registros) ? payload.registros : [];
 
+  const normalizedRecords = records.map((record) => ({
+    ...record,
+    projectName: record.proyecto?.nombre || record.projectName || 'Proyecto',
+    hours: record.cantidadhoras ?? record.cantidadHoras ?? record.hours ?? 0,
+    date: record.fecha || record.date,
+    status: record.validado
+      ? 'validada'
+      : record.aprobado
+        ? 'aprobada'
+        : 'pendiente',
+  }));
+
+  const totalHoras = Number(payload.totalHoras || 0);
+  const horasValidadas = normalizedRecords
+    .filter((record) => record.validado || record.status === 'validada')
+    .reduce((sum, record) => sum + Number(record.hours || 0), 0);
+
+  const horasPendientes = totalHoras - horasValidadas;
+
   return {
-    member: payload.member || null,
+    member: payload.miembro || null,
     memberId: payload.miembroId || null,
-    records: records.map((record) => ({
-      ...record,
-      projectName: record.proyecto?.nombre || record.projectName || 'Proyecto',
-      hours: record.cantidadHoras ?? record.hours ?? 0,
-      date: record.fecha || record.date,
-      status: (record.estado || record.status || 'pendiente').toLowerCase(),
-    })),
-    summary: payload.resumen || {},
+    records: normalizedRecords,
+    summary: {
+      horasTotales: totalHoras,
+      horasValidadas,
+      horasPendientes: horasPendientes > 0 ? horasPendientes : 0,
+      registrosTotales: normalizedRecords.length,
+    },
     pagination: response?.metadata?.pagination || response?.pagination || null,
   };
 };
@@ -39,11 +57,17 @@ const HistorialHoras = () => {
     setLoading(true);
     setError('');
     try {
-      const response = await getMyHistory({ limit: 100 });
+      const userId = currentUser?.id;
+
+      if (!userId) {
+        throw new Error('No se pudo identificar el usuario actual');
+      }
+      
+      const response = await getHoursHistory(userId, { limit: 100 });
       const payload = normalizeHistory(response);
 
       setMemberInfo(payload.member || {
-        name: currentUser?.profile?.nombre || currentUser?.name || 'Miembro',
+        nombre: currentUser?.profile?.nombre || currentUser?.name || 'Miembro',
         email: currentUser?.email || '',
         committee: currentUser?.profile?.comite || 'Sin comité',
         joinDate: currentUser?.createdAt || null,
@@ -128,7 +152,7 @@ const HistorialHoras = () => {
                 <User size={32} className="text-white" />
               </div>
               <div className="flex-1">
-                <h3 className="font-poppins font-bold text-xl text-[#1f2937]">{memberInfo.name || 'Miembro'}</h3>
+                <h3 className="font-poppins font-bold text-xl text-[#1f2937]">{memberInfo.nombre || memberInfo.name || 'Miembro'}</h3>
                 <p className="font-inter text-sm text-[#64748b]">{memberInfo.email}</p>
                 <div className="flex gap-4 mt-2 text-sm text-[#64748b]">
                   <span className="flex items-center gap-1"><FolderKanban size={14} />{memberInfo.committee || 'Sin comité'}</span>

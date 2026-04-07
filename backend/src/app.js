@@ -43,6 +43,25 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// API root info endpoint for quick browser checks.
+app.get('/api', (req, res) => {
+  res.json({
+    success: true,
+    data: {
+      status: 'online',
+      health: '/api/health',
+      auth: '/api/login',
+      timestamp: new Date().toISOString(),
+    },
+    message: 'API OSFLSystem en linea',
+  });
+});
+
+// Backward-compatible typo alias often used manually in browser.
+app.get('/api/healt', (req, res) => {
+  res.redirect(307, '/api/health');
+});
+
 // Rutas principales del dominio (projects, finance, hours, committees, etc.)
 app.use('/api', apiRoutes);
 

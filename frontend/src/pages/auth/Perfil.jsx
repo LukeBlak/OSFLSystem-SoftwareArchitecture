@@ -2,12 +2,31 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import authService from '../../services/authService';
 
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+
 function Perfil() {
   const navigate = useNavigate();
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [lastAccess, setLastAccess] = useState(null);
+  const [profileForm, setProfileForm] = useState({
+    nombre: '',
+    apellido: '',
+    telefono: '',
+    direccion: '',
+  });
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: '',
+    newPassword: '',
+    newPasswordConfirm: '',
+  });
+  const [showEditForm, setShowEditForm] = useState(false);
+  const [showPasswordForm, setShowPasswordForm] = useState(false);
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [savingPassword, setSavingPassword] = useState(false);
+  const [actionError, setActionError] = useState('');
+  const [actionSuccess, setActionSuccess] = useState('');
 
   useEffect(() => {
     loadUserProfile();
@@ -21,7 +40,31 @@ function Perfil() {
         navigate('/login');
         return;
       }
-      setUser(currentUser);
+      const response = await fetch(`${API_URL}/profile`, {
+        method: 'GET',
+        headers: authService.authHeaders(),
+      });
+
+      const payload = await response.json().catch(() => ({}));
+
+      const profileData = payload?.data?.profile;
+      const mergedUser = profileData
+        ? {
+            ...currentUser,
+            id: profileData.id || currentUser.id,
+            email: profileData.email || currentUser.email,
+            role: profileData.role || currentUser.role,
+            profile: profileData.profile || currentUser.profile || {},
+            organizationId: profileData.organizationId || currentUser.organizationId || null,
+            organizationName: profileData.organizationName || currentUser.organizationName || null,
+            isActive: typeof profileData.isActive === 'boolean' ? profileData.isActive : currentUser.isActive,
+            createdAt: profileData.createdAt || currentUser.createdAt,
+            updatedAt: profileData.updatedAt || currentUser.updatedAt,
+          }
+        : currentUser;
+
+      setUser(mergedUser);
+      localStorage.setItem('user', JSON.stringify(mergedUser));
       
       //Recuperar último acceso guardado en localStorage
       const storedLastAccess = localStorage.getItem(`lastAccess_${currentUser.id || currentUser.email}`);
@@ -46,6 +89,126 @@ function Perfil() {
     
     localStorage.setItem(storageKey, now);
     setLastAccess(now); // ← Guardamos el string ISO directamente
+  };
+
+  const openEditForm = () => {
+    setActionError('');
+    setActionSuccess('');
+    setShowPasswordForm(false);
+    setProfileForm({
+      nombre: user?.profile?.nombre || '',
+      apellido: user?.profile?.apellido || '',
+      telefono: user?.profile?.telefono || '',
+      direccion: user?.profile?.direccion || '',
+    });
+    setShowEditForm(true);
+  };
+
+  const openPasswordForm = () => {
+    setActionError('');
+    setActionSuccess('');
+    setShowEditForm(false);
+    setPasswordForm({
+      currentPassword: '',
+      newPassword: '',
+      newPasswordConfirm: '',
+    });
+    setShowPasswordForm(true);
+  };
+
+  const handleProfileSave = async (event) => {
+    event.preventDefault();
+    setSavingProfile(true);
+    setActionError('');
+    setActionSuccess('');
+
+    try {
+      const response = await fetch(`${API_URL}/profile`, {
+        method: 'PUT',
+        headers: authService.authHeaders(),
+        body: JSON.stringify({ profile: profileForm }),
+      });
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload?.error?.message || payload?.message || 'No se pudo actualizar el perfil');
+      }
+
+      const updatedProfile = payload?.data?.profile?.profile || profileForm;
+      const updatedUser = {
+        ...user,
+        profile: {
+          ...(user?.profile || {}),
+          ...updatedProfile,
+        },
+      };
+
+      setUser(updatedUser);
+      localStorage.setItem('user', JSON.stringify(updatedUser));
+      setShowEditForm(false);
+      setActionSuccess('Perfil actualizado correctamente.');
+    } catch (err) {
+      setActionError(err.message || 'Error al actualizar el perfil');
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
+  const handlePasswordSave = async (event) => {
+    event.preventDefault();
+    setSavingPassword(true);
+    setActionError('');
+    setActionSuccess('');
+
+    try {
+      if (!authService.getToken()) {
+        authService.clearSession();
+        navigate('/login');
+        throw new Error('Tu sesión no es válida. Inicia sesión nuevamente.');
+      }
+
+      if (passwordForm.newPassword !== passwordForm.newPasswordConfirm) {
+        throw new Error('Las nuevas contraseñas no coinciden.');
+      }
+
+      const response = await fetch(`${API_URL}/profile/change-password`, {
+        method: 'PUT',
+        headers: authService.authHeaders(),
+        body: JSON.stringify(passwordForm),
+      });
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const backendMessage = payload?.error?.userMessage || payload?.error?.message || payload?.message || '';
+        const firstValidationDetail = payload?.error?.details?.errors?.[0]?.message || '';
+
+        if (response.status === 401) {
+          const normalizedMessage = String(backendMessage || '').toLowerCase();
+
+          if (normalizedMessage.includes('contraseña actual')) {
+            throw new Error('La contraseña actual es incorrecta.');
+          }
+
+          authService.clearSession();
+          navigate('/login');
+          throw new Error('Tu sesión expiró. Inicia sesión nuevamente para cambiar tu contraseña.');
+        }
+
+        throw new Error(backendMessage || firstValidationDetail || 'No se pudo cambiar la contraseña');
+      }
+
+      setPasswordForm({
+        currentPassword: '',
+        newPassword: '',
+        newPasswordConfirm: '',
+      });
+      setShowPasswordForm(false);
+      setActionSuccess('Contraseña actualizada correctamente.');
+    } catch (err) {
+      setActionError(err.message || 'Error al cambiar la contraseña');
+    } finally {
+      setSavingPassword(false);
+    }
   };
 
   // formatear la fecha de último acceso (EXACTO)
@@ -119,6 +282,14 @@ function Perfil() {
     }
   };
 
+  const isUserActive = typeof user?.isActive === 'boolean'
+    ? user.isActive
+    : typeof user?.estadoActivo === 'boolean'
+      ? user.estadoActivo
+      : true;
+
+  const shouldShowOrganizationCard = String(user?.role || '').toLowerCase() !== 'super_admin';
+
   return (
     <div className="min-h-screen p-6 md:p-10">
       {/* Header */}
@@ -179,15 +350,17 @@ function Perfil() {
 
           <div className="bg-gray-50 p-4 rounded-xl">
             <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Estado</label>
-            <span className={`inline-block mt-2 px-3 py-1 rounded-full text-sm font-semibold ${user?.isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
-              {user?.isActive ? 'Activo' : 'Inactivo'}
+            <span className={`inline-block mt-2 px-3 py-1 rounded-full text-sm font-semibold ${isUserActive ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
+              {isUserActive ? 'Activo' : 'Inactivo'}
             </span>
           </div>
 
-          {user?.organizationId && (
+          {shouldShowOrganizationCard && (
             <div className="bg-gray-50 p-4 rounded-xl">
               <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Organización</label>
-              <p className="text-lg font-medium text-gray-800 mt-1">{user.organizationId}</p>
+              <p className="text-lg font-medium text-gray-800 mt-1 break-words">
+                {user?.organizationName || user?.organizationId || 'No asignada'}
+              </p>
             </div>
           )}
 
@@ -202,7 +375,152 @@ function Perfil() {
           </div>
         </div>
       </div>
+      {/* Actions */}
+      <div className="max-w-3xl mx-auto flex flex-col sm:flex-row gap-4 justify-center">
+        <button
+          type="button"
+          onClick={openEditForm}
+          className="flex-1 bg-gradient-to-r from-teal-600 to-teal-500 hover:from-teal-700 hover:to-teal-600 text-white font-semibold py-3 px-6 rounded-lg shadow-md hover:shadow-lg transition-all duration-300"
+        >
+          Editar Perfil
+        </button>
+        <button
+          type="button"
+          onClick={openPasswordForm}
+          className="flex-1 bg-white hover:bg-teal-50 text-teal-600 border-2 border-teal-600 font-semibold py-3 px-6 rounded-lg shadow-sm hover:shadow-md transition-all duration-300"
+        >
+          Cambiar Contraseña
+        </button>
+      </div>
 
+      {(actionError || actionSuccess) && (
+        <div className="max-w-3xl mx-auto mt-4">
+          {actionError && (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-red-700 font-medium">
+              {actionError}
+            </div>
+          )}
+          {actionSuccess && (
+            <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-emerald-700 font-medium">
+              {actionSuccess}
+            </div>
+          )}
+        </div>
+      )}
+
+      {showEditForm && (
+        <div className="fixed inset-0 z-[120] bg-black/40 flex items-center justify-center px-4">
+          <form onSubmit={handleProfileSave} className="bg-white rounded-2xl shadow-2xl p-6 md:p-8 w-full max-w-2xl space-y-4">
+            <h2 className="text-xl font-bold text-teal-700">Editar Perfil</h2>
+            {actionError && (
+              <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-red-700 font-medium">
+                {actionError}
+              </div>
+            )}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <input
+                type="text"
+                placeholder="Nombre"
+                value={profileForm.nombre}
+                onChange={(e) => setProfileForm((prev) => ({ ...prev, nombre: e.target.value }))}
+                className="w-full rounded-lg border border-gray-300 px-4 py-2"
+              />
+              <input
+                type="text"
+                placeholder="Apellido"
+                value={profileForm.apellido}
+                onChange={(e) => setProfileForm((prev) => ({ ...prev, apellido: e.target.value }))}
+                className="w-full rounded-lg border border-gray-300 px-4 py-2"
+              />
+              <input
+                type="text"
+                placeholder="Teléfono (8 dígitos)"
+                value={profileForm.telefono}
+                onChange={(e) => setProfileForm((prev) => ({ ...prev, telefono: e.target.value }))}
+                className="w-full rounded-lg border border-gray-300 px-4 py-2"
+              />
+              <input
+                type="text"
+                placeholder="Dirección"
+                value={profileForm.direccion}
+                onChange={(e) => setProfileForm((prev) => ({ ...prev, direccion: e.target.value }))}
+                className="w-full rounded-lg border border-gray-300 px-4 py-2"
+              />
+            </div>
+            <div className="flex gap-3 justify-end">
+              <button
+                type="button"
+                onClick={() => setShowEditForm(false)}
+                className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={savingProfile}
+                className="px-4 py-2 rounded-lg bg-teal-600 text-white font-semibold disabled:opacity-60"
+              >
+                {savingProfile ? 'Guardando...' : 'Guardar cambios'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {showPasswordForm && (
+        <div className="fixed inset-0 z-[120] bg-black/40 flex items-center justify-center px-4">
+          <form onSubmit={handlePasswordSave} className="bg-white rounded-2xl shadow-2xl p-6 md:p-8 w-full max-w-2xl space-y-4">
+            <h2 className="text-xl font-bold text-teal-700">Cambiar Contraseña</h2>
+            {actionError && (
+              <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-red-700 font-medium">
+                {actionError}
+              </div>
+            )}
+            <div className="grid grid-cols-1 gap-4">
+              <input
+                type="password"
+                placeholder="Contraseña actual"
+                value={passwordForm.currentPassword}
+                onChange={(e) => setPasswordForm((prev) => ({ ...prev, currentPassword: e.target.value }))}
+                className="w-full rounded-lg border border-gray-300 px-4 py-2"
+                required
+              />
+              <input
+                type="password"
+                placeholder="Nueva contraseña"
+                value={passwordForm.newPassword}
+                onChange={(e) => setPasswordForm((prev) => ({ ...prev, newPassword: e.target.value }))}
+                className="w-full rounded-lg border border-gray-300 px-4 py-2"
+                required
+              />
+              <input
+                type="password"
+                placeholder="Confirmar nueva contraseña"
+                value={passwordForm.newPasswordConfirm}
+                onChange={(e) => setPasswordForm((prev) => ({ ...prev, newPasswordConfirm: e.target.value }))}
+                className="w-full rounded-lg border border-gray-300 px-4 py-2"
+                required
+              />
+            </div>
+            <div className="flex gap-3 justify-end">
+              <button
+                type="button"
+                onClick={() => setShowPasswordForm(false)}
+                className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={savingPassword}
+                className="px-4 py-2 rounded-lg bg-teal-600 text-white font-semibold disabled:opacity-60"
+              >
+                {savingPassword ? 'Actualizando...' : 'Actualizar contraseña'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
 
       </div>
   );

@@ -29,9 +29,9 @@
 import { ApiError } from '../utils/apiError.js';
 import { StatusCodes } from 'http-status-codes';
 import { logger } from '../utils/logger.js';
+import { supabaseAdmin } from '../config/supabase.js';
 import { MemberRepository } from '../repositories/MemberRepository.js';
 import { OrganizationRepository } from '../repositories/OrganizationRepository.js';
-import { UserRepository } from '../repositories/UserRepository.js';
 import {
   MEMBER_STATUS,
   MEMBER_BUSINESS_RULES,
@@ -76,6 +76,62 @@ const VIEWER_ROLES = [
   USER_ROLES.MIEMBRO,
 ];
 
+const DEFAULT_NEW_USER_PASSWORD = 'password123*';
+
+const resolveOrganizationIdForUser = async (currentUser) => {
+  const directOrganizationId = (
+    currentUser?.organizationId
+    || currentUser?.organizacionId
+    || currentUser?.organization_id
+    || currentUser?.organizacion_id
+    || null
+  );
+
+  if (directOrganizationId) {
+    return directOrganizationId;
+  }
+
+  const userId = currentUser?.id;
+  const email = currentUser?.email;
+
+  if (userId) {
+    const { data: liderById, error: liderByIdError } = await supabaseAdmin
+      .from('lider_organizacion')
+      .select('organizacionid')
+      .eq('id', userId)
+      .limit(1)
+      .maybeSingle();
+
+    if (!liderByIdError && liderById?.organizacionid) {
+      return liderById.organizacionid;
+    }
+  }
+
+  if (email) {
+    const { data: usuarioByEmail, error: usuarioByEmailError } = await supabaseAdmin
+      .from('usuario')
+      .select('id')
+      .eq('email', email)
+      .limit(1)
+      .maybeSingle();
+
+    if (!usuarioByEmailError && usuarioByEmail?.id) {
+      const { data: liderByUsuarioId, error: liderByUsuarioError } = await supabaseAdmin
+        .from('lider_organizacion')
+        .select('organizacionid')
+        .eq('id', usuarioByEmail.id)
+        .limit(1)
+        .maybeSingle();
+
+      if (!liderByUsuarioError && liderByUsuarioId?.organizacionid) {
+        return liderByUsuarioId.organizacionid;
+      }
+    }
+  }
+
+  return null;
+};
+
 // =============================================================================
 // FUNCIONES DEL SERVICIO
 // =============================================================================
@@ -115,10 +171,22 @@ const VIEWER_ROLES = [
  */
 export const registerMember = async (memberData) => {
   try {
+    const effectiveOrganizationId = memberData.organizacionId || await resolveOrganizationIdForUser({
+      id: memberData.registradoPor,
+      email: memberData.registradorEmail || null,
+    });
+
+    if (!effectiveOrganizationId) {
+      throw ApiError.badRequest('No se pudo determinar la organizacion del usuario que registra');
+    }
+
     // =========================================================================
     // 1. VALIDAR DATOS DE ENTRADA
     // =========================================================================
-    const validData = validateCreateMember(memberData);
+    const validData = validateCreateMember({
+      ...memberData,
+      organizacionId: effectiveOrganizationId,
+    });
 
     // =========================================================================
     // 2. VALIDAR FORMATO DEL DUI
@@ -134,8 +202,9 @@ export const registerMember = async (memberData) => {
       );
     }
 
-    // Usar DUI formateado
+    // La BD usa VARCHAR(9) para DUI (sin guion), por eso persistimos formato compacto.
     const formattedDUI = duiValidation.formatted;
+    const compactDUI = formattedDUI.replace('-', '');
 
     // =========================================================================
     // 3. VERIFICAR EDAD MÍNIMA
@@ -168,57 +237,205 @@ export const registerMember = async (memberData) => {
     // 5. VERIFICAR UNICIDAD DE DUI Y EMAIL
     // =========================================================================
     const existingMember = await MemberRepository.findByDuiOrEmail(
-      formattedDUI,
+      compactDUI,
       validData.email
     );
 
     if (existingMember) {
-      const conflictField = existingMember.dui === formattedDUI ? 'DUI' : 'email';
+      const conflictField = existingMember.dui === compactDUI ? 'DUI' : 'email';
       throw ApiError.conflict(
         `El ${conflictField} ya está registrado en el sistema`,
         {
           code: 'MEMBER_ALREADY_EXISTS',
           details: {
             field: conflictField,
-            value: conflictField === 'DUI' ? formattedDUI : validData.email,
+            value: conflictField === 'DUI' ? compactDUI : validData.email,
           },
         }
       );
     }
 
+    const { data: existingPublicUserByEmail, error: existingPublicUserError } = await supabaseAdmin
+      .from('usuario')
+      .select('id, email')
+      .eq('email', validData.email)
+      .limit(1)
+      .maybeSingle();
+
+    if (existingPublicUserError) {
+      logger.error('Error al validar usuario existente para miembro', {
+        error: existingPublicUserError,
+        errorMessage: existingPublicUserError?.message,
+        errorCode: existingPublicUserError?.code,
+        email: validData.email,
+      });
+
+      throw ApiError.internal('Error al registrar el miembro');
+    }
+
     // =========================================================================
-    // 6. PREPARAR DATOS PARA CREACIÓN
+    // 6. CREAR USUARIO EN SUPABASE AUTH + PERFIL PUBLICO
+    // =========================================================================
+    let memberUserId = existingPublicUserByEmail?.id || null;
+    let createdAuthUserId = null;
+
+    if (!memberUserId) {
+      const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
+        email: validData.email,
+        password: DEFAULT_NEW_USER_PASSWORD,
+        email_confirm: true,
+        user_metadata: {
+          role: USER_ROLES.MIEMBRO,
+          organization_id: validData.organizacionId,
+        },
+      });
+
+      if (authError || !authUser?.user?.id) {
+        logger.error('Error al crear usuario auth para miembro', {
+          error: authError,
+          errorMessage: authError?.message,
+          errorCode: authError?.code,
+          email: validData.email,
+        });
+
+        throw ApiError.internal('Error al registrar el miembro');
+      }
+
+      memberUserId = authUser.user.id;
+      createdAuthUserId = authUser.user.id;
+
+      // El trigger puede crear public.usuario automaticamente; si no existe, se crea manualmente con admin.
+      const { data: existingPublicUser, error: existingPublicUserByIdError } = await supabaseAdmin
+        .from('usuario')
+        .select('id')
+        .eq('id', memberUserId)
+        .limit(1)
+        .maybeSingle();
+
+      if (existingPublicUserByIdError) {
+        logger.error('Error al verificar usuario publico creado por trigger', {
+          error: existingPublicUserByIdError,
+          errorMessage: existingPublicUserByIdError?.message,
+          errorCode: existingPublicUserByIdError?.code,
+          userId: memberUserId,
+        });
+
+        await supabaseAdmin.auth.admin.deleteUser(memberUserId);
+        throw ApiError.internal('Error al registrar el miembro');
+      }
+
+      if (!existingPublicUser?.id) {
+        const { error: publicUserError } = await supabaseAdmin
+          .from('usuario')
+          .insert({
+            id: memberUserId,
+            email: validData.email,
+            nombre: validData.nombre,
+          });
+
+        if (publicUserError) {
+          logger.error('Error al crear usuario publico para miembro', {
+            error: publicUserError,
+            errorMessage: publicUserError?.message,
+            errorCode: publicUserError?.code,
+            userId: memberUserId,
+            email: validData.email,
+          });
+
+          await supabaseAdmin.auth.admin.deleteUser(memberUserId);
+          throw ApiError.internal('Error al registrar el miembro');
+        }
+      }
+    }
+
+    const { error: authMetadataUpdateError } = await supabaseAdmin.auth.admin.updateUserById(
+      memberUserId,
+      {
+        user_metadata: {
+          role: USER_ROLES.MIEMBRO,
+          organization_id: validData.organizacionId,
+        },
+      }
+    );
+
+    if (authMetadataUpdateError) {
+      logger.warn('No se pudo sincronizar metadata de organizacion en Auth para miembro', {
+        error: authMetadataUpdateError,
+        errorMessage: authMetadataUpdateError?.message,
+        errorCode: authMetadataUpdateError?.code,
+        userId: memberUserId,
+        organizacionId: validData.organizacionId,
+      });
+    }
+
+    const { error: syncPublicUserError } = await supabaseAdmin
+      .from('usuario')
+      .update({
+        nombre: validData.nombre,
+        email: validData.email,
+      })
+      .eq('id', memberUserId);
+
+    if (syncPublicUserError) {
+      logger.error('Error al sincronizar datos de usuario publico del miembro', {
+        error: syncPublicUserError,
+        errorMessage: syncPublicUserError?.message,
+        errorCode: syncPublicUserError?.code,
+        userId: memberUserId,
+        email: validData.email,
+      });
+
+      if (createdAuthUserId) {
+        await supabaseAdmin.auth.admin.deleteUser(createdAuthUserId);
+      }
+      throw ApiError.internal('Error al registrar el miembro');
+    }
+
+    // =========================================================================
+    // 7. PREPARAR DATOS PARA CREACIÓN
     // =========================================================================
     const memberToCreate = {
-      dui: formattedDUI,
+      id: memberUserId,
+      dui: compactDUI,
       nombre: validData.nombre,
       email: validData.email,
       telefono: validData.telefono || null,
       fechanacimiento: validData.fechanacimiento || null,
       direccion: validData.direccion || null,
-      horasTotales: 0,
-      estadoActivo: true,
-      organizacionId: validData.organizacionId,
-      creadoPor: memberData.registradoPor,
+      horastotales: 0,
+      estadoactivo: true,
+      creado_por: memberData.registradoPor,
     };
 
     // =========================================================================
-    // 7. CREAR MIEMBRO EN LA BASE DE DATOS
+    // 8. CREAR MIEMBRO EN LA BASE DE DATOS
     // =========================================================================
-    const { data: member, error } = await MemberRepository.create(memberToCreate);
+    const { data: member, error } = await supabaseAdmin
+      .from('miembro')
+      .insert(memberToCreate)
+      .select('*')
+      .single();
 
     if (error || !member) {
       logger.error('Error al crear miembro', {
         error,
+        errorMessage: error?.message,
+        errorCode: error?.code,
+        errorDetails: error?.details,
+        errorHint: error?.hint,
         organizacionId: validData.organizacionId,
         dui: formattedDUI,
         email: validData.email,
       });
+
+      if (createdAuthUserId) {
+        await supabaseAdmin.auth.admin.deleteUser(createdAuthUserId);
+      }
       throw ApiError.internal('Error al registrar el miembro');
     }
 
     // =========================================================================
-    // 8. REGISTRAR EN LOGS
+    // 9. REGISTRAR EN LOGS
     // =========================================================================
     logger.info('Miembro registrado exitosamente', {
       memberId: member.id,
@@ -280,10 +497,8 @@ export const getAllMembers = async (filters = {}, pagination = {}, currentUser) 
 
     // Si no es admin, debe especificar organización y solo puede ver esa
     if (!isAdmin && !filters.organizacionId) {
-      // Usar la organización del usuario
-      if (currentUser.organizationId) {
-        filters.organizacionId = currentUser.organizationId;
-      } else {
+      filters.organizacionId = await resolveOrganizationIdForUser(currentUser);
+      if (!filters.organizacionId) {
         throw ApiError.forbidden(
           'Debes especificar una organización para consultar miembros',
           {
@@ -294,7 +509,8 @@ export const getAllMembers = async (filters = {}, pagination = {}, currentUser) 
     }
 
     // Si no es admin, verificar que solo consulta su organización
-    if (!isAdmin && filters.organizacionId && filters.organizacionId !== currentUser.organizationId) {
+    const userOrganizationId = await resolveOrganizationIdForUser(currentUser);
+    if (!isAdmin && filters.organizacionId && userOrganizationId && filters.organizacionId !== userOrganizationId) {
       throw ApiError.forbidden(
         'Solo puedes consultar miembros de tu organización',
         {
@@ -405,14 +621,22 @@ export const getMemberById = async (memberId, currentUser) => {
       throw ApiError.notFound('Miembro no encontrado');
     }
 
+    const memberOrganizationId = await MemberRepository.resolveOrganizationId(memberId);
+
     // =========================================================================
     // 3. VERIFICAR PERMISOS DE ACCESO
     // =========================================================================
     const isAdmin = [USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN].includes(currentUser.role);
 
+    const currentUserOrganizationId = await resolveOrganizationIdForUser(currentUser);
+
     if (!isAdmin) {
       // Verificar que el usuario pertenezca a la misma organización
-      if (currentUser.organizationId && currentUser.organizationId !== member.organizacionId) {
+      if (
+        currentUserOrganizationId
+        && memberOrganizationId
+        && currentUserOrganizationId !== memberOrganizationId
+      ) {
         throw ApiError.forbidden('No tienes permisos para ver este miembro');
       }
 
@@ -426,7 +650,7 @@ export const getMemberById = async (memberId, currentUser) => {
     // 4. OBTENER DATOS RELACIONADOS
     // =========================================================================
     const [organizacion, registroHoras, postulaciones] = await Promise.all([
-      OrganizationRepository.findById(member.organizacionId),
+      memberOrganizationId ? OrganizationRepository.findById(memberOrganizationId) : null,
       MemberRepository.getMemberHours(memberId),
       MemberRepository.getMemberApplications(memberId),
     ]);
@@ -436,6 +660,7 @@ export const getMemberById = async (memberId, currentUser) => {
     // =========================================================================
     return formatMemberForResponse({
       ...member,
+      organizacionId: memberOrganizationId,
       organizacion,
       registroHoras: registroHoras || [],
       postulaciones: postulaciones || [],

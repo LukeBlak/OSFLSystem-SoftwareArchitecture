@@ -115,6 +115,7 @@ export const getProfile = async (req, res, next) => {
             role: profile.role,
             profile: profile.profile,
             organizationId: profile.organizationId,
+            organizationName: profile.organizationName || null,
             isActive: profile.isActive,
             createdAt: profile.createdAt,
             updatedAt: profile.updatedAt,
@@ -552,7 +553,7 @@ export const changePassword = async (req, res, next) => {
     // - Validar contraseña actual (comparar hash)
     // - Hashear nueva contraseña
     // - Actualizar en Supabase Auth
-    await profileService.changePassword(userId, currentPassword, newPassword);
+    await profileService.changePassword(userId, req.user.email, currentPassword, newPassword);
 
     // =========================================================================
     // 7. RETORNAR RESPUESTA EXITOSA

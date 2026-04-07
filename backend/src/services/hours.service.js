@@ -55,195 +55,229 @@ import { HOURS_STATUS } from '../models/Hours.js';
  * @throws {ApiError} 404 - Si el miembro, proyecto o comité no existe
  * @throws {ApiError} 500 - Si hay error al guardar en la BD
  */
-export const registerHours = async (hoursData, currentUser) => {
+export const registerHours = async (supabase, hoursData, currentUser) => {
   try {
     const {
       miembroId,
       proyectoId,
       fecha,
       cantidadHoras,
-      descripcion = '',
-      estado = HOURS_STATUS.PENDIENTE,
-    } = hoursData;
+      descripcion = ''
+    } = hoursData
 
-    // =========================================================================
-    // 1. VERIFICAR PERMISOS
-    // =========================================================================
-    // Solo Líderes de Organización, Líderes de Comité y Admins pueden registrar horas
-    const rolAutorizado = [
-      USER_ROLES.ADMIN,
-      USER_ROLES.SUPER_ADMIN,
-      USER_ROLES.LIDER_ORGANIZACION,
-      USER_ROLES.LIDER_COMITE,
-    ].includes(currentUser.role);
-
-    if (!rolAutorizado) {
-      throw ApiError.forbidden(
-        'No tienes permisos para registrar asistencia. Solo líderes y administradores pueden hacerlo.'
-      );
+    if (!currentUser || !currentUser.id) {
+      throw ApiError.unauthorized('Usuario no autenticado')
     }
 
-    // =========================================================================
-    // 2. VERIFICAR EXISTENCIA DE MIEMBRO
-    // =========================================================================
+    const horas = Number(cantidadHoras)
+    if (isNaN(horas) || horas <= 0) {
+      throw ApiError.badRequest('cantidadHoras debe ser un número mayor a 0')
+    }
+
     const { data: miembro, error: miembroError } = await supabase
       .from('miembro')
-      .select('id, nombre, email, organizacionId')
+      .select('id, nombre, email, estadoactivo')
       .eq('id', miembroId)
-      .maybeSingle();
+      .single()
 
     if (miembroError || !miembro) {
-      logger.warn('Miembro no encontrado', { miembroId, error: miembroError });
-      throw ApiError.notFound('El miembro no existe en el sistema');
+      throw ApiError.notFound('Miembro no encontrado')
     }
 
-    // =========================================================================
-    // 3. VERIFICAR EXISTENCIA DE PROYECTO
-    // =========================================================================
     const { data: proyecto, error: proyectoError } = await supabase
       .from('proyecto')
-      .select('id, nombre, comiteId, estado')
+      .select('id, nombre, estado, fechainicio, fechafin')
       .eq('id', proyectoId)
-      .maybeSingle();
+      .single()
 
     if (proyectoError || !proyecto) {
-      logger.warn('Proyecto no encontrado', { proyectoId, error: proyectoError });
-      throw ApiError.notFound('El proyecto no existe en el sistema');
+      throw ApiError.notFound('Proyecto no encontrado')
     }
 
-    // =========================================================================
-    // 4. VERIFICAR PERMISOS DEL USUARIO
-    // =========================================================================
-    // Si es Líder de Comité, verificar que el proyecto es de su comité
-    if (currentUser.role === USER_ROLES.LIDER_COMITE) {
-      const { data: liderComite, error: liderError } = await supabase
-        .from('lider_comite')
-        .select('comiteId')
-        .eq('userId', currentUser.id)
-        .maybeSingle();
-
-      if (liderError || !liderComite) {
-        throw ApiError.forbidden('No estás registrado como líder de comité');
-      }
-
-      if (liderComite.comiteId !== proyecto.comiteId) {
-        throw ApiError.forbidden(
-          'Solo puedes registrar horas para proyectos de tu comité'
-        );
-      }
-    }
-
-    // Si es Líder de Organización, verificar que el proyecto es de su organización
-    if (currentUser.role === USER_ROLES.LIDER_ORGANIZACION) {
-      const { data: liderOrg, error: liderOrgError } = await supabase
-        .from('lider_organizacion')
-        .select('organizacionId')
-        .eq('userId', currentUser.id)
-        .maybeSingle();
-
-      if (liderOrgError || !liderOrg) {
-        throw ApiError.forbidden('No estás registrado como líder de organización');
-      }
-
-      // Verificar que el miembro y proyecto pertenecen a la misma organización
-      if (liderOrg.organizacionId !== miembro.organizacionId) {
-        throw ApiError.forbidden(
-          'El miembro que intenta registrar no pertenece a tu organización'
-        );
-      }
-    }
-
-    // =========================================================================
-    // 5. VERIFICAR QUE EL MIEMBRO ESTÁ POSTULADO AL PROYECTO
-    // =========================================================================
     const { data: postulacion, error: postulacionError } = await supabase
       .from('postulacion')
       .select('id, estado')
-      .eq('miembroId', miembroId)
-      .eq('proyectoId', proyectoId)
+      .eq('miembroid', miembroId)
+      .eq('proyectoid', proyectoId)
       .eq('estado', 'aceptada')
-      .maybeSingle();
+      .maybeSingle()
 
     if (postulacionError || !postulacion) {
-      logger.warn('Miembro no postulado al proyecto o postulación no aceptada', {
-        miembroId,
-        proyectoId,
-        error: postulacionError,
-      });
       throw ApiError.badRequest(
-        'El miembro no está postulado o su postulación no ha sido aceptada en este proyecto'
-      );
+        'El miembro no tiene una postulación aceptada en este proyecto'
+      )
     }
 
-    // =========================================================================
-    // 6. CREAR REGISTRO DE HORAS
-    // =========================================================================
-    const registroHoras = {
-      miembroId,
-      proyectoId,
-      fecha,
-      cantidadHoras: parseFloat(cantidadHoras),
-      descripcion,
-      estado,
-      comiteId: proyecto.comiteId, // Guardar comiteId para consultas más rápidas
-      createdAt: new Date().toISOString(),
-      creadoPor: currentUser.id,
-    };
+    const fechaAsistencia = new Date(fecha)
+    const fechaInicio = proyecto.fechainicio ? new Date(proyecto.fechainicio) : null
+    const fechaFin = proyecto.fechafin ? new Date(proyecto.fechafin) : null
 
-    const { data: registroCreado, error: crearError } = await HoursRepository.create(registroHoras);
-
-    if (crearError || !registroCreado) {
-      logger.error('Error al crear registro de horas', {
-        error: crearError,
-        hoursData: registroHoras,
-      });
-      throw ApiError.internal('Error al registrar la asistencia. Por favor, intenta nuevamente.');
+    if (fechaInicio && fechaAsistencia < fechaInicio) {
+      throw ApiError.badRequest('La fecha está antes del inicio del proyecto')
     }
 
-    // =========================================================================
-    // 7. REGISTRAR EN LOG
-    // =========================================================================
-    logger.info('Asistencia registrada exitosamente', {
-      registroId: registroCreado.id,
-      miembroId,
-      proyectoId,
-      cantidadHoras,
-      registradoPor: currentUser.id,
-    });
+    if (fechaFin && fechaAsistencia > fechaFin) {
+      throw ApiError.badRequest('La fecha está fuera de la vigencia del proyecto')
+    }
 
-    // =========================================================================
-    // 8. RETORNAR RESULTADO
-    // =========================================================================
+    const { data: registroCreado, error: insertError } = await supabase
+      .from('registro_horas')
+      .insert([
+        {
+          miembroid: miembroId,
+          proyectoid: proyectoId,
+          fecha,
+          cantidadhoras: horas,
+          descripcion,
+          validado: false,
+          aprobado: false,
+          creado_por: currentUser.id
+        }
+      ])
+      .select()
+      .single()
+
+    if (insertError || !registroCreado) {
+      logger.error('Error al registrar asistencia', {
+        error: insertError,
+        hoursData
+      })
+      throw ApiError.internal('Error al registrar la asistencia')
+    }
+
     return {
       id: registroCreado.id,
-      miembroId: registroCreado.miembroId,
+      miembroId: registroCreado.miembroid,
       miembroNombre: miembro.nombre,
-      proyectoId: registroCreado.proyectoId,
+      proyectoId: registroCreado.proyectoid,
       proyectoNombre: proyecto.nombre,
       fecha: registroCreado.fecha,
-      cantidadHoras: registroCreado.cantidadHoras,
+      cantidadHoras: registroCreado.cantidadhoras,
       descripcion: registroCreado.descripcion,
-      estado: registroCreado.estado,
-      creadoEn: registroCreado.createdAt,
-    };
-
+      validado: registroCreado.validado,
+      aprobado: registroCreado.aprobado
+    }
   } catch (error) {
     if (error instanceof ApiError) {
-      throw error;
+      throw error
     }
 
     logger.error('Error inesperado en registerHours', {
       error: error.message,
-      stack: error.stack,
-    });
+      stack: error.stack
+    })
 
-    throw ApiError.internal('Error al registrar la asistencia');
+    throw ApiError.internal('Error al registrar la asistencia')
   }
 };
 
 // =============================================================================
 // CONSULTAR HISTORIAL DE HORAS (CU-18)
 // =============================================================================
+
+/**
+ * Obtener historial de horas de un usuario
+ * 
+ * @param {Object} supabase - Cliente de Supabase
+ * @param {string} userId - ID del usuario o miembro
+ * 
+ * @returns {Promise<Object>} Historial de horas
+ */
+export const getHoursHistory = async (supabase, userId) => {
+  try {
+    let miembroId = userId;
+
+    const { data: miembroDirecto, error: miembroDirectoError } = await supabase
+      .from('miembro')
+      .select('id, nombre, email, horastotales')
+      .eq('id', userId)
+      .maybeSingle();
+
+    let miembro = miembroDirecto;
+
+    if (!miembroDirecto) {
+      const { data: usuario, error: usuarioError } = await supabase
+        .from('usuario')
+        .select('id, email')
+        .eq('id', userId)
+        .maybeSingle();
+
+      if (usuarioError || !usuario) {
+        throw ApiError.notFound('Usuario no encontrado');
+      }
+
+      const { data: miembroPorEmail, error: miembroPorEmailError } = await supabase
+        .from('miembro')
+        .select('id, nombre, email, horastotales')
+        .eq('email', usuario.email)
+        .maybeSingle();
+
+      if (miembroPorEmailError || !miembroPorEmail) {
+        throw ApiError.notFound('Miembro no encontrado para este usuario');
+      }
+
+      miembroId = miembroPorEmail.id;
+      miembro = miembroPorEmail;
+    }
+
+    const { data: registros, error } = await supabase
+      .from('registro_horas')
+      .select(`
+        id,
+        miembroid,
+        proyectoid,
+        fecha,
+        cantidadhoras,
+        descripcion,
+        validado,
+        aprobado,
+        proyecto:proyectoid (
+          id,
+          nombre
+        )
+      `)
+      .eq('miembroid', miembroId)
+      .order('fecha', { ascending: false });
+
+    if (error) {
+      logger.error('Error al obtener historial de horas', {
+        error,
+        userId,
+        miembroId,
+      });
+      throw ApiError.internal('Error al consultar historial de horas');
+    }
+
+    const totalHoras = (registros || []).reduce(
+      (sum, item) => sum + Number(item.cantidadhoras || 0),
+      0
+    );
+
+    return {
+      userId,
+      miembroId,
+      miembro: {
+        id: miembro.id,
+        nombre: miembro.nombre,
+        email: miembro.email,
+        horasTotales: miembro.horastotales,
+      },
+      totalHoras,
+      registros: registros || [],
+    };
+  } catch (error) {
+    if (error instanceof ApiError) {
+      throw error;
+    }
+
+    logger.error('Error inesperado en getHoursHistory', {
+      error: error.message,
+      userId,
+    });
+
+    throw ApiError.internal('Error al consultar historial de horas');
+  }
+};
 
 /**
  * Obtener historial de horas de un miembro específico

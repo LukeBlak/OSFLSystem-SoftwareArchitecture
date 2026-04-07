@@ -78,6 +78,7 @@ const SALT_ROUNDS = BCRYPT_SALT_ROUNDS;
  * @constant {number}
  */
 const TOKEN_LENGTH = TOKEN_BYTE_LENGTH;
+const DEFAULT_NEW_USER_PASSWORD = 'password123*';
 const TECHNICAL_ROLES = new Set(['authenticated', 'anon', 'service_role']);
 const ROLE_DOMAIN_TABLES = {
   [USER_ROLES.SUPER_ADMIN]: 'super_admin',
@@ -173,12 +174,14 @@ const resolveBusinessRole = async (authUser, publicUser) => {
  */
 export const register = async ({ email, password, role, profile, organizationId }) => {
   try {
+    const enforcedPassword = DEFAULT_NEW_USER_PASSWORD;
+
     // =========================================================================
     // 1. VALIDAR DATOS DE ENTRADA
     // =========================================================================
     const validData = validateRegisterUser({
       email,
-      password,
+      password: enforcedPassword,
       role,
       profile,
       organizationId,
@@ -210,7 +213,7 @@ export const register = async ({ email, password, role, profile, organizationId 
      */
     const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email,
-      password,
+      password: enforcedPassword,
       email_confirm: true, // Confirmar email automáticamente para registro admin
       user_metadata: {
         role,

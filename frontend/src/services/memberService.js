@@ -13,6 +13,8 @@ export const getMembers = (params = {}) => {
   return apiClient.get(`/members${query ? `?${query}` : ''}`);
 };
 
+export const createMember = (payload) => apiClient.post('/members', payload);
+
 export const validateHours = (memberId, hourId, payload) => apiClient.patch(
   `/members/${memberId}/horas/${hourId}/validate`,
   payload
@@ -20,5 +22,6 @@ export const validateHours = (memberId, hourId, payload) => apiClient.patch(
 
 export default {
   getMembers,
+  createMember,
   validateHours,
 };

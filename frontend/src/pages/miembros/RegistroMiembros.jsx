@@ -1,12 +1,15 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { User, Mail, Phone } from 'lucide-react';
+import { User, Mail, Phone, CreditCard } from 'lucide-react';
+import { createMember } from '../../services/memberService';
+import authService from '../../services/authService';
 
 const RegistroMiembros = () => {
     const navigate = useNavigate();
     const [formData, setFormData] = useState({
+        dui: '',
         nombre: '',
-        correo: '',
+        email: '',
         telefono: ''
     });
     const [errors, setErrors] = useState({});
@@ -22,14 +25,19 @@ const RegistroMiembros = () => {
 
     const validate = () => {
         const newErrors = {};
+        const normalizedPhone = formData.telefono.replace(/\D/g, '');
+
+        if (!/^\d{8}-\d$/.test(formData.dui.trim())) {
+            newErrors.dui = 'Ingrese un DUI valido (formato 00000000-0)';
+        }
         if (!formData.nombre.trim()) {
             newErrors.nombre = 'El nombre es obligatorio';
         }
-        if (!formData.correo.trim() || !/\S+@\S+\.\S+/.test(formData.correo)) {
-            newErrors.correo = 'Ingrese un correo válido';
+        if (!formData.email.trim() || !/\S+@\S+\.\S+/.test(formData.email)) {
+            newErrors.email = 'Ingrese un correo valido';
         }
-        if (!formData.telefono.trim()) {
-            newErrors.telefono = 'El teléfono es obligatorio';
+        if (formData.telefono.trim() && normalizedPhone.length !== 8) {
+            newErrors.telefono = 'El telefono debe tener 8 digitos';
         }
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
@@ -41,11 +49,25 @@ const RegistroMiembros = () => {
 
         setLoading(true);
         try {
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            alert('Miembro registrado exitosamente. Se ha enviado un correo de bienvenida.');
+            const sessionUser = authService.getUser() || await authService.checkSession();
+            const organizationId = sessionUser?.organizationId
+                || sessionUser?.organizacionId
+                || sessionUser?.organization_id
+                || sessionUser?.organizacion_id
+                || '';
+
+            await createMember({
+                dui: formData.dui.trim(),
+                nombre: formData.nombre.trim(),
+                email: formData.email.trim().toLowerCase(),
+                telefono: formData.telefono.trim() ? formData.telefono.replace(/\D/g, '') : undefined,
+                organizacionId: organizationId || undefined,
+            });
+
+            alert('Miembro registrado exitosamente.');
             navigate('/estructura/miembros');
         } catch (error) {
-            alert('Error al registrar miembro: ' + error.message);
+            alert(error?.message || 'Error al registrar miembro');
         } finally {
             setLoading(false);
         }
@@ -64,6 +86,25 @@ const RegistroMiembros = () => {
 
             <form onSubmit={handleSubmit} className="card p-8">
                 <div className="space-y-6">
+                    {/* DUI */}
+                    <div>
+                        <label className="block text-text-primary font-inter font-semibold mb-2">
+                            DUI *
+                        </label>
+                        <div className="relative">
+                            <CreditCard className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary" size={18} />
+                            <input
+                                type="text"
+                                name="dui"
+                                value={formData.dui}
+                                onChange={handleChange}
+                                className={`input-field pl-10 ${errors.dui ? 'border-red-500' : ''}`}
+                                placeholder="00000000-0"
+                            />
+                        </div>
+                        {errors.dui && <p className="mt-1 text-sm text-red-500">{errors.dui}</p>}
+                    </div>
+
                     {/* Nombre */}
                     <div>
                         <label className="block text-text-primary font-inter font-semibold mb-2">
@@ -92,16 +133,16 @@ const RegistroMiembros = () => {
                             <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary" size={18} />
                             <input
                                 type="email"
-                                name="correo"
-                                value={formData.correo}
+                                name="email"
+                                value={formData.email}
                                 onChange={handleChange}
-                                className={`input-field pl-10 ${errors.correo ? 'border-red-500' : ''}`}
+                                className={`input-field pl-10 ${errors.email ? 'border-red-500' : ''}`}
                                 placeholder="juan@ejemplo.org"
                             />
                         </div>
-                        {errors.correo && <p className="mt-1 text-sm text-red-500">{errors.correo}</p>}
+                        {errors.email && <p className="mt-1 text-sm text-red-500">{errors.email}</p>}
                         <p className="mt-1 text-xs text-text-secondary">
-                            Se enviarán las credenciales de acceso a este correo
+                            Se usara este correo para identificar al miembro
                         </p>
                     </div>
 
@@ -118,7 +159,7 @@ const RegistroMiembros = () => {
                                 value={formData.telefono}
                                 onChange={handleChange}
                                 className={`input-field pl-10 ${errors.telefono ? 'border-red-500' : ''}`}
-                                placeholder="7000-0000"
+                                placeholder="70000000"
                             />
                         </div>
                         {errors.telefono && <p className="mt-1 text-sm text-red-500">{errors.telefono}</p>}
