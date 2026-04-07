@@ -79,7 +79,10 @@ export const getProjects = async (req, res, next) => {
     const userOrganizationId = req.user?.organizationId || await resolveOrganizationIdForUser(req.user);
 
     if (!userOrganizationId) {
-      return next(new ApiError(400, 'No se pudo resolver la organización del usuario autenticado'));
+      const projects = await projectService.getProjects(req.supabase, { ...req.query });
+
+      return res.json(ApiResponse.ok(projects, 'Proyectos obtenidos'));
+      
     }
 
     if (queryOrganizationId && queryOrganizationId !== userOrganizationId) {
