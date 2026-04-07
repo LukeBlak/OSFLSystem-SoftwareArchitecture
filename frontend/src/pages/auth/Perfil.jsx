@@ -241,6 +241,11 @@ function Perfil() {
     }
   };
 
+  const handleBack = () => {
+    const homePath = authService.getHomeByRole(user?.role) || '/';
+    navigate(homePath, { replace: true });
+  };
+
   // Loading state
   if (loading) {
     return (
@@ -296,7 +301,7 @@ function Perfil() {
       <div className="max-w-3xl mx-auto mb-8 flex flex-col sm:flex-row justify-between items-center gap-4">
         <div className="flex items-center gap-3">
           <button
-            onClick={() => navigate(-1)}
+            onClick={handleBack}
             className="p-2 rounded-lg text-teal-600 hover:bg-teal-100 transition-all duration-300"
             aria-label="Volver a la página anterior"
           >

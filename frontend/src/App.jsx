@@ -137,7 +137,7 @@ const protectedRoutes = [
   { path: '/proyectos/planificar', roles: [ROLES.LIDER_ORGANIZACION], element: <PlanificarProyecto /> },
   { path: '/proyectos/vincular', roles: [ROLES.LIDER_ORGANIZACION], element: <VincularComite /> },
   { path: '/proyectos/vincular/:projectId', roles: [ROLES.LIDER_ORGANIZACION], element: <VincularComite /> },
-  { path: '/proyectos/inscribirse', roles: [ROLES.MIEMBRO], element: <InscribirseProyecto /> },
+  { path: '/proyectos/inscribirse', roles: [ROLES.MIEMBRO, ROLES.LIDER_ORGANIZACION], element: <InscribirseProyecto /> },
   { path: '/proyectos/aprobar', roles: [ROLES.LIDER_ORGANIZACION, ROLES.LIDER_COMITE], element: <AprobarParticipante /> },
   { path: '/proyectos/aprobar/:projectId', roles: [ROLES.LIDER_ORGANIZACION, ROLES.LIDER_COMITE], element: <AprobarParticipante /> },
 
@@ -147,7 +147,7 @@ const protectedRoutes = [
 
   { path: '/finanzas/ingreso/nuevo', roles: [ROLES.LIDER_ORGANIZACION, ROLES.LIDER_COMITE], element: <RegistroIngreso /> },
   { path: '/finanzas/egreso/nuevo', roles: [ROLES.LIDER_ORGANIZACION, ROLES.LIDER_COMITE], element: <RegistroEgreso /> },
-  { path: '/finanzas/caja', roles: [ROLES.ADMIN, ROLES.LIDER_ORGANIZACION, ROLES.LIDER_COMITE, ROLES.MIEMBRO], element: <ConsultarCaja /> },
+  { path: '/finanzas/caja', roles: [ROLES.ADMIN, ROLES.LIDER_ORGANIZACION, ROLES.MIEMBRO], element: <ConsultarCaja /> },
   { path: '/finanzas/reportes', roles: [ROLES.LIDER_ORGANIZACION, ROLES.LIDER_COMITE, ROLES.MIEMBRO], element: <ReportesFinancieros /> },
 ];
 

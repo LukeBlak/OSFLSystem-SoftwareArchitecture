@@ -2,8 +2,9 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import NavbarInner from '../../components/NavbarInner';
 import { FolderKanban, Calendar, Users, Send, RefreshCcw, CheckCircle2, Clock, AlertCircle } from 'lucide-react';
-import { getProjects } from '../../services/projectService';
+import { getProjects, updateProjectStatus } from '../../services/projectService';
 import { createPostulation, getMyPostulations } from '../../services/postulationService';
+import authService from '../../services/authService';
 
 const normalizeProjects = (response) => {
   const items = Array.isArray(response?.data)
@@ -37,6 +38,8 @@ const normalizeMyPostulations = (response) => {
 
 const InscribirseProyecto = () => {
   const navigate = useNavigate();
+  const currentUser = authService.getUser();
+  const canActivateExecution = String(currentUser?.role || '').toLowerCase() === 'lider_organizacion';
   const [projects, setProjects] = useState([]);
   const [myPostulations, setMyPostulations] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -59,11 +62,11 @@ const InscribirseProyecto = () => {
       ]);
 
       const allProjects = normalizeProjects(projectsResponse);
-      const convocatoriaProjects = allProjects.filter(
-        (project) => (project.status || '').toLowerCase() === 'convocatoria'
+      const activeProjects = allProjects.filter(
+        (project) => (project.status || '').toLowerCase() === 'en_ejecucion'
       );
 
-      setProjects(convocatoriaProjects.length > 0 ? convocatoriaProjects : allProjects);
+      setProjects(activeProjects.length > 0 ? activeProjects : allProjects);
       setMyPostulations(normalizeMyPostulations(myPostulationsResponse));
     } catch (error) {
       setMessage(error.userMessage || error.message || 'No se pudieron cargar los proyectos');
@@ -106,6 +109,23 @@ const InscribirseProyecto = () => {
     }
   };
 
+  const handleActivateExecution = async (projectId) => {
+    setLoading(true);
+    setMessage('');
+
+    try {
+      await updateProjectStatus(projectId, 'En_Ejecucion');
+      setMessage('Proyecto activado en fase de ejecucion');
+      setMessageType('success');
+      await loadData();
+    } catch (error) {
+      setMessage(error.userMessage || error.message || 'No se pudo activar el estado En_Ejecucion');
+      setMessageType('error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const getStatusBadge = (status) => {
     const normalized = (status || '').toLowerCase();
 
@@ -122,7 +142,7 @@ const InscribirseProyecto = () => {
     <div className="min-h-screen bg-[#f8faf9]">
       <NavbarInner
         title="Inscribirse a Proyecto"
-        subtitle="Postúlate a los proyectos disponibles en convocatoria"
+        subtitle="Postulate a los proyectos en ejecucion"
       />
 
       <main className="container mx-auto px-6 pt-28 pb-12 max-w-6xl">
@@ -143,7 +163,7 @@ const InscribirseProyecto = () => {
         )}
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-          <div className="card p-4"><p className="font-inter text-xs text-[#64748b]">En convocatoria</p><p className="font-poppins font-bold text-2xl text-[#1f2937]">{stats.available}</p></div>
+          <div className="card p-4"><p className="font-inter text-xs text-[#64748b]">En ejecucion</p><p className="font-poppins font-bold text-2xl text-[#1f2937]">{stats.available}</p></div>
           <div className="card p-4"><p className="font-inter text-xs text-[#64748b]">Pendientes</p><p className="font-poppins font-bold text-2xl text-yellow-600">{stats.pending}</p></div>
           <div className="card p-4"><p className="font-inter text-xs text-[#64748b]">Aceptadas</p><p className="font-poppins font-bold text-2xl text-green-600">{stats.accepted}</p></div>
           <div className="card p-4"><p className="font-inter text-xs text-[#64748b]">Rechazadas</p><p className="font-poppins font-bold text-2xl text-red-600">{stats.rejected}</p></div>
@@ -159,7 +179,7 @@ const InscribirseProyecto = () => {
             <div className="card p-12 text-center lg:col-span-2">
               <AlertCircle size={38} className="text-[#64748b] mx-auto mb-3" />
               <h3 className="font-poppins font-bold text-xl text-[#1f2937] mb-2">No hay proyectos disponibles</h3>
-              <p className="font-inter text-[#64748b]">No encontramos proyectos en convocatoria por ahora.</p>
+              <p className="font-inter text-[#64748b]">No encontramos proyectos en ejecucion por ahora.</p>
             </div>
           ) : projects.map((project) => (
             <div key={project.id} className="card p-6">
@@ -184,6 +204,16 @@ const InscribirseProyecto = () => {
               <button onClick={() => handlePostulate(project.id)} disabled={loading} className="w-full btn-primary py-2.5 flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed">
                 <Send size={16} /> Postularme
               </button>
+
+              {canActivateExecution && String(project.status || '').toLowerCase() !== 'en_ejecucion' && (
+                <button
+                  onClick={() => handleActivateExecution(project.id)}
+                  disabled={loading}
+                  className="w-full mt-2 btn-outline py-2.5 flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  Activar En_Ejecucion
+                </button>
+              )}
             </div>
           ))}
         </div>

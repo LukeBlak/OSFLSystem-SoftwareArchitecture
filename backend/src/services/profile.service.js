@@ -38,15 +38,17 @@ const resolveRoleFromDomainTables = async (userId) => {
   ];
 
   for (const check of checks) {
-    const { data, error } = await supabaseAdmin
-      .from(check.table)
-      .select('id')
-      .eq('id', userId)
-      .limit(1)
-      .maybeSingle();
+    for (const key of ['id', 'userid', 'user_id']) {
+      const { data, error } = await supabaseAdmin
+        .from(check.table)
+        .select('id')
+        .eq(key, userId)
+        .limit(1)
+        .maybeSingle();
 
-    if (!error && data) {
-      return check.role;
+      if (!error && data) {
+        return check.role;
+      }
     }
   }
 
@@ -54,6 +56,11 @@ const resolveRoleFromDomainTables = async (userId) => {
 };
 
 const resolveUserRole = async (userId, row) => {
+  const domainRole = await resolveRoleFromDomainTables(userId);
+  if (domainRole === 'lider_comite') {
+    return 'lider_comite';
+  }
+
   const rowRole = pickBusinessRole([row?.role, row?.rol]);
   if (rowRole) return rowRole;
 
@@ -78,7 +85,6 @@ const resolveUserRole = async (userId, row) => {
     });
   }
 
-  const domainRole = await resolveRoleFromDomainTables(userId);
   return domainRole || 'miembro';
 };
 

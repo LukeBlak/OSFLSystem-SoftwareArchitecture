@@ -10,6 +10,8 @@ const ConsultaComites = () => {
     const [busqueda, setBusqueda] = useState('');
     const [filtroArea, setFiltroArea] = useState('todas');
     const [loading, setLoading] = useState(true);
+    const role = String(authService.getUser()?.role || '').toLowerCase();
+    const canCreateCommittees = ['admin', 'lider_organizacion'].includes(role);
 
     useEffect(() => {
         loadComites();
@@ -100,13 +102,15 @@ const ConsultaComites = () => {
                             ))}
                         </select>
                     </div>
-                    <button
-                        onClick={() => navigate('/estructura/comites/nuevo')}
-                        className="btn-primary flex items-center gap-2"
-                    >
-                        <Plus size={18} />
-                        Nuevo Comité
-                    </button>
+                    {canCreateCommittees && (
+                        <button
+                            onClick={() => navigate('/estructura/comites/nuevo')}
+                            className="btn-primary flex items-center gap-2"
+                        >
+                            <Plus size={18} />
+                            Nuevo Comité
+                        </button>
+                    )}
                 </div>
             </div>
 

@@ -24,11 +24,32 @@ const normalizeMembers = (response) => {
     ? response.data
     : response?.data?.members || response?.data || [];
 
-  return items.map((member) => ({
-    ...member,
-    name: member.nombre || member.name,
-    email: member.email || member.correo || '',
-  }));
+  return items
+    .map((member) => ({
+      ...member,
+      id:
+        member.id
+        || member.miembroId
+        || member.miembroid
+        || member.memberId
+        || member.miembro?.id
+        || member.member?.id
+        || null,
+      name:
+        member.nombre
+        || member.name
+        || member.miembro?.nombre
+        || member.member?.name
+        || member.member?.nombre
+        || 'Sin nombre',
+      email:
+        member.email
+        || member.correo
+        || member.miembro?.email
+        || member.member?.email
+        || '',
+    }))
+    .filter((member) => Boolean(member.id));
 };
 
 const RegistroAsistencia = () => {
@@ -81,8 +102,8 @@ const RegistroAsistencia = () => {
   const validate = () => {
     const nextErrors = {};
 
-    if (!selectedProject) nextErrors.selectedProject = 'Seleccione un proyecto';
-    if (!selectedMember) nextErrors.selectedMember = 'Seleccione un miembro';
+    if (!selectedProject || selectedProject === 'undefined') nextErrors.selectedProject = 'Seleccione un proyecto';
+    if (!selectedMember || selectedMember === 'undefined') nextErrors.selectedMember = 'Seleccione un miembro';
     if (!activityDate) nextErrors.activityDate = 'Seleccione una fecha';
     if (!hours || Number(hours) < 0.5 || Number(hours) > 24) nextErrors.hours = 'Ingrese horas entre 0.5 y 24';
     if (!description.trim()) nextErrors.description = 'Agregue una breve descripción';

@@ -151,6 +151,49 @@ export const updateProject = async (supabase, projectId, updateData) => {
 
 /**
  * -----------------------------------------------------------------------------
+ * ACTUALIZAR ESTADO DE PROYECTO
+ * -----------------------------------------------------------------------------
+ */
+export const updateProjectStatus = async (supabase, projectId, estado) => {
+  try {
+    if (!estado) throw ApiError.badRequest('El estado del proyecto es requerido');
+
+    const normalizedEstado = String(estado).trim().toLowerCase();
+    const estadoToPersist = ['convocatoria', 'activo', 'en_ejecucion', 'en ejecucion', 'ejecucion'].includes(normalizedEstado)
+      ? 'En_Ejecucion'
+      : estado;
+
+    const { data: project, error } = await supabase
+      .from('proyecto')
+      .update({ estado: estadoToPersist })
+      .eq('id', projectId)
+      .select()
+      .single();
+
+    if (error) {
+      logger.error('Error al actualizar estado del proyecto', { error, projectId, estado });
+      const errorMessage = String(error?.message || '').toLowerCase();
+
+      if (error?.code === '22P02' || errorMessage.includes('invalid input value for enum')) {
+        throw ApiError.badRequest('El estado proporcionado no es válido para este proyecto');
+      }
+
+      if (error?.code === '42501') {
+        throw ApiError.forbidden('No tienes permisos para actualizar el estado de este proyecto');
+      }
+
+      throw ApiError.internal('Error al actualizar el estado del proyecto');
+    }
+
+    return project;
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    throw ApiError.internal('Error al actualizar estado del proyecto');
+  }
+};
+
+/**
+ * -----------------------------------------------------------------------------
  * ASIGNAR A COMITÉ (CU-13)
  * -----------------------------------------------------------------------------
  */

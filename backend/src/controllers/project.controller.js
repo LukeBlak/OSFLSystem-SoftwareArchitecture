@@ -23,6 +23,37 @@ const resolveOrganizationIdForUser = async (user) => {
     if (!error && data?.organizacionid) {
       return data.organizacionid;
     }
+
+    const { data: committeeAsLeader, error: committeeAsLeaderError } = await supabaseAdmin
+      .from('comite')
+      .select('organizacionid')
+      .eq('lidercomiteid', user.id)
+      .limit(1)
+      .maybeSingle();
+
+    if (!committeeAsLeaderError && committeeAsLeader?.organizacionid) {
+      return committeeAsLeader.organizacionid;
+    }
+
+    const { data: memberCommittee, error: memberCommitteeError } = await supabaseAdmin
+      .from('miembro_comite')
+      .select('comiteid')
+      .eq('miembroid', user.id)
+      .limit(1)
+      .maybeSingle();
+
+    if (!memberCommitteeError && memberCommittee?.comiteid) {
+      const { data: committeeByMembership, error: committeeByMembershipError } = await supabaseAdmin
+        .from('comite')
+        .select('organizacionid')
+        .eq('id', memberCommittee.comiteid)
+        .limit(1)
+        .maybeSingle();
+
+      if (!committeeByMembershipError && committeeByMembership?.organizacionid) {
+        return committeeByMembership.organizacionid;
+      }
+    }
   }
 
   return null;
@@ -90,6 +121,40 @@ export const assignCommittee = async (req, res, next) => {
     if (!comiteId) return next(new ApiError(400, 'comiteId es requerido'));
     const project = await projectService.assignCommittee(req.supabase, req.params.id, comiteId);
     res.json(ApiResponse.ok(project, 'Comité vinculado'));
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const updateProjectStatus = async (req, res, next) => {
+  try {
+    const { estado } = req.body;
+
+    if (!estado) {
+      return next(new ApiError(400, 'estado es requerido'));
+    }
+
+    const userOrganizationId = req.user?.organizationId || await resolveOrganizationIdForUser(req.user);
+    if (!userOrganizationId) {
+      return next(new ApiError(400, 'No se pudo resolver la organización del usuario autenticado'));
+    }
+
+    const { data: existingProject, error: projectLookupError } = await supabaseAdmin
+      .from('proyecto')
+      .select('id, organizacionid')
+      .eq('id', req.params.id)
+      .maybeSingle();
+
+    if (projectLookupError || !existingProject) {
+      return next(new ApiError(404, 'Proyecto no encontrado'));
+    }
+
+    if (existingProject.organizacionid && existingProject.organizacionid !== userOrganizationId) {
+      return next(new ApiError(403, 'No tienes permisos para actualizar este proyecto'));
+    }
+
+    const project = await projectService.updateProjectStatus(supabaseAdmin, req.params.id, estado);
+    res.json(ApiResponse.ok(project, 'Estado del proyecto actualizado'));
   } catch (err) {
     next(err);
   }

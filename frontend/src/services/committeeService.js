@@ -28,6 +28,8 @@ export const getCommitteeMembers = (committeeId, params = {}) => {
 
 export const createCommittee = (committeeData) => apiClient.post('/committees', committeeData);
 export const getCommitteeById = (committeeId) => apiClient.get(`/committees/${committeeId}`);
+export const assignCommitteeLeader = (committeeId, liderComiteId) =>
+  apiClient.post(`/committees/${committeeId}/assign-leader`, { liderComiteId });
 export const addMemberToCommittee = (committeeId, miembroId) =>
   apiClient.post(`/committees/${committeeId}/members`, { miembroId });
 export const removeMemberFromCommittee = (committeeId, memberId) =>
@@ -36,6 +38,7 @@ export const removeMemberFromCommittee = (committeeId, memberId) =>
 export default {
   getCommittees,
   getCommitteeById,
+  assignCommitteeLeader,
   getCommitteeMembers,
   createCommittee,
   addMemberToCommittee,

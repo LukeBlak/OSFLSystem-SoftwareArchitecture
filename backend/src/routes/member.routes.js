@@ -170,6 +170,16 @@ const canViewMembers = [
   requireRole([ROLES.LIDER_ORGANIZACION, ROLES.LIDER_COMITE]),
 ];
 
+/**
+ * Middleware para validar horas
+ *
+ * Permite validar horas a quienes gestionan miembros o comités.
+ */
+const canValidateHours = [
+  authenticate,
+  requireRole([ROLES.ADMIN, ROLES.SUPER_ADMIN, ROLES.LIDER_ORGANIZACION, ROLES.LIDER_COMITE]),
+];
+
 // =============================================================================
 // RUTAS PÚBLICAS (No requieren autenticación)
 // =============================================================================
@@ -684,7 +694,7 @@ router.post(
  */
 router.patch(
   '/:id/horas/:horaId/validate',
-  authenticate,
+  canValidateHours,
   memberController.validateMemberHours
 );
 

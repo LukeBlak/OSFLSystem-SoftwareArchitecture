@@ -1020,7 +1020,7 @@ export const registerMemberHours = async (req, res, next) => {
  * Caso de Uso: Validar (aprobar/rechazar) horas sociales de un miembro
  * 
  * @route PATCH /api/members/:id/horas/:horaId/validate
- * @access Privado (requiere autenticación + rol: admin, lider_organizacion, coordinador)
+ * @access Privado (requiere autenticación + rol: admin, super_admin, lider_organizacion, lider_comite)
  * 
  * @param {Object} req - Objeto de petición de Express
  * @param {string} req.params.id - ID del miembro
@@ -1047,7 +1047,7 @@ export const validateMemberHours = async (req, res, next) => {
       throw ApiError.badRequest('Debe proveer observaciones al rechazar las horas');
     }
 
-    const allowedRoles = ['admin', 'lider_organizacion', 'coordinador'];
+    const allowedRoles = ['admin', 'super_admin', 'lider_organizacion', 'lider_comite'];
     if (!allowedRoles.includes(req.user.role)) {
       throw ApiError.forbidden('No tienes permisos para validar horas');
     }

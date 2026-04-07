@@ -11,6 +11,8 @@ const Navbar = () => {
   const normalizedRole = String(role || '').toLowerCase();
   const hideManagementMenus = normalizedRole === 'super_admin';
   const canSeeStructureMenu = ['admin', 'lider_organizacion', 'lider_comite'].includes(normalizedRole);
+  const canSeeOrganizationSection = ['admin', 'lider_organizacion'].includes(normalizedRole);
+  const isCommitteeLeader = normalizedRole === 'lider_comite';
   const homePath = role === 'super_admin' ? '/admin' : '/';
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showEstructuraMenu, setShowEstructuraMenu] = useState(false);
@@ -86,32 +88,35 @@ const Navbar = () => {
               {showEstructuraMenu && (
                 <div className="absolute top-full left-0 mt-2 w-64 bg-white rounded-lg shadow-lg border border-border py-2 z-50">
                   
-                  {/* Organizaciones */}
-                  <div className="px-4 py-2 text-xs font-inter font-semibold text-text-secondary border-b border-border mb-1">
-                    ORGANIZACIONES
-                  </div>
-                  <button
-                    onClick={() => {
-                      navigate(role === 'super_admin' ? '/admin/organizaciones' : '/estructura/organizaciones');
-                      setShowEstructuraMenu(false);
-                    }}
-                    className="w-full text-left px-4 py-2 text-text-primary font-inter hover:bg-gray-50 transition-colors flex items-center gap-2"
-                  >
-                    <Building2 size={16} className="text-[#8B5CF6]" />
-                    <span className="font-semibold text-sm">Consultar</span>
-                  </button>
-                  <button
-                    onClick={() => {
-                      navigate('/estructura/organizaciones/nueva');
-                      setShowEstructuraMenu(false);
-                    }}
-                    className="w-full text-left px-4 py-2 text-text-primary font-inter hover:bg-gray-50 transition-colors flex items-center gap-2"
-                  >
-                    <Building2 size={16} className="text-[#8B5CF6]" />
-                    <span className="font-semibold text-sm">Registrar Nueva</span>
-                  </button>
+                  {canSeeOrganizationSection && (
+                    <>
+                      <div className="px-4 py-2 text-xs font-inter font-semibold text-text-secondary border-b border-border mb-1">
+                        ORGANIZACIONES
+                      </div>
+                      <button
+                        onClick={() => {
+                          navigate(role === 'super_admin' ? '/admin/organizaciones' : '/estructura/organizaciones');
+                          setShowEstructuraMenu(false);
+                        }}
+                        className="w-full text-left px-4 py-2 text-text-primary font-inter hover:bg-gray-50 transition-colors flex items-center gap-2"
+                      >
+                        <Building2 size={16} className="text-[#8B5CF6]" />
+                        <span className="font-semibold text-sm">Consultar</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          navigate('/estructura/organizaciones/nueva');
+                          setShowEstructuraMenu(false);
+                        }}
+                        className="w-full text-left px-4 py-2 text-text-primary font-inter hover:bg-gray-50 transition-colors flex items-center gap-2"
+                      >
+                        <Building2 size={16} className="text-[#8B5CF6]" />
+                        <span className="font-semibold text-sm">Registrar Nueva</span>
+                      </button>
 
-                  <hr className="my-2 border-border" />
+                      <hr className="my-2 border-border" />
+                    </>
+                  )}
 
                   {/* Miembros */}
                   <div className="px-4 py-2 text-xs font-inter font-semibold text-text-secondary border-b border-border mb-1">
@@ -154,26 +159,30 @@ const Navbar = () => {
                   <div className="px-4 py-2 text-xs font-inter font-semibold text-text-secondary border-b border-border mb-1">
                     COMITÉS
                   </div>
-                  <button
-                    onClick={() => {
-                      navigate('/estructura/comites');
-                      setShowEstructuraMenu(false);
-                    }}
-                    className="w-full text-left px-4 py-2 text-text-primary font-inter hover:bg-gray-50 transition-colors flex items-center gap-2"
-                  >
-                    <Building2 size={16} className="text-[#0d9488]" />
-                    <span className="font-semibold text-sm">Consultar</span>
-                  </button>
-                  <button
-                    onClick={() => {
-                      navigate('/estructura/comites/nuevo');
-                      setShowEstructuraMenu(false);
-                    }}
-                    className="w-full text-left px-4 py-2 text-text-primary font-inter hover:bg-gray-50 transition-colors flex items-center gap-2"
-                  >
-                    <Building2 size={16} className="text-[#0d9488]" />
-                    <span className="font-semibold text-sm">Crear Comité</span>
-                  </button>
+                  {!isCommitteeLeader && (
+                    <button
+                      onClick={() => {
+                        navigate('/estructura/comites');
+                        setShowEstructuraMenu(false);
+                      }}
+                      className="w-full text-left px-4 py-2 text-text-primary font-inter hover:bg-gray-50 transition-colors flex items-center gap-2"
+                    >
+                      <Building2 size={16} className="text-[#0d9488]" />
+                      <span className="font-semibold text-sm">Consultar</span>
+                    </button>
+                  )}
+                  {!isCommitteeLeader && (
+                    <button
+                      onClick={() => {
+                        navigate('/estructura/comites/nuevo');
+                        setShowEstructuraMenu(false);
+                      }}
+                      className="w-full text-left px-4 py-2 text-text-primary font-inter hover:bg-gray-50 transition-colors flex items-center gap-2"
+                    >
+                      <Building2 size={16} className="text-[#0d9488]" />
+                      <span className="font-semibold text-sm">Crear Comité</span>
+                    </button>
+                  )}
                   <button
                     onClick={() => {
                       navigate('/estructura/comites');
@@ -192,9 +201,9 @@ const Navbar = () => {
             {/* Actividades */}
             {!hideManagementMenus && (
             <button 
-              onClick={() => navigate('/')}
+              onClick={() => navigate('/proyectos/inscribirse')}
               className={`nav-link flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
-                isActive('/actividades') ? 'bg-white/10' : 'hover:bg-white/10'
+                isActive('/proyectos') ? 'bg-white/10' : 'hover:bg-white/10'
               }`}
             >
               <Calendar size={18} />

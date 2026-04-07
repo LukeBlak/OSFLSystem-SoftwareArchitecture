@@ -3,21 +3,28 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { Users, UserPlus, UserMinus, Crown, ArrowLeft } from 'lucide-react';
 import {
     addMemberToCommittee,
+    assignCommitteeLeader,
     getCommitteeById,
     getCommitteeMembers,
     removeMemberFromCommittee,
 } from '../../services/committeeService';
 import { getMembers } from '../../services/memberService';
+import authService from '../../services/authService';
 
 const GestionComite = () => {
     const navigate = useNavigate();
     const { id } = useParams();
+    const currentUser = authService.getUser();
     const [comite, setComite] = useState(null);
     const [miembros, setMiembros] = useState([]);
     const [miembrosDisponibles, setMiembrosDisponibles] = useState([]);
     const [showAgregarModal, setShowAgregarModal] = useState(false);
     const [selectedMiembros, setSelectedMiembros] = useState([]);
     const [loading, setLoading] = useState(true);
+    const role = String(authService.getUser()?.role || '').toLowerCase();
+    const canAddMembers = ['admin', 'lider_organizacion'].includes(role);
+    const canAssignLeader = ['admin', 'lider_organizacion', 'lider_comite'].includes(role);
+    const canRemoveMembers = ['admin', 'lider_organizacion', 'lider_comite'].includes(role);
 
     const mapMember = (rawMember, liderId = null) => {
         const member = rawMember?.miembro || rawMember;
@@ -48,14 +55,22 @@ const GestionComite = () => {
                 || membersResponse?.data
                 || [];
 
-            const liderId = committeePayload.liderComiteId || committeePayload.lidercomiteid || null;
+            const liderId = committeePayload.liderComiteId
+                || committeePayload.lidercomiteid
+                || committeePayload.lider_comite_id
+                || null;
+            const currentUserName = currentUser?.profile?.nombre
+                || currentUser?.nombre
+                || currentUser?.email
+                || 'Líder asignado';
+            const isCurrentUserLeader = Boolean(liderId) && String(liderId) === String(currentUser?.id);
 
             setComite({
                 id: committeePayload.id || id,
                 nombre: committeePayload.nombre || 'Sin nombre',
                 descripcion: committeePayload.descripcion || 'Sin descripción',
                 areaEnfoque: committeePayload.areaResponsabilidad || committeePayload.arearesponsabilidad || 'Sin área',
-                lider: committeePayload.lider?.nombre || 'No asignado',
+                lider: committeePayload.lider?.nombre || committeePayload.liderNombre || (isCurrentUserLeader ? currentUserName : 'No asignado'),
                 organizacionId: committeePayload.organizacionId || committeePayload.organizacionid || null,
                 fechaCreacion: committeePayload.createdAt || committeePayload.fechaCreacion || committeePayload.fechacreacion || null,
             });
@@ -90,6 +105,11 @@ const GestionComite = () => {
     };
 
     const handleAgregarMiembros = async () => {
+        if (!canAddMembers) {
+            alert('No tienes permisos para agregar miembros al comité');
+            return;
+        }
+
         if (selectedMiembros.length === 0) {
             alert('Seleccione al menos un miembro');
             return;
@@ -106,6 +126,11 @@ const GestionComite = () => {
     };
 
     const handleRemoverMiembro = async (miembroId) => {
+        if (!canRemoveMembers) {
+            alert('No tienes permisos para remover miembros del comité');
+            return;
+        }
+
         const miembro = miembros.find(m => m.id === miembroId);
         if (miembro.esLider) {
             alert('No se puede remover al líder del comité. Designe un nuevo líder primero.');
@@ -122,14 +147,26 @@ const GestionComite = () => {
         }
     };
 
-    const handleDesignarLider = (miembroId) => {
+    const handleDesignarLider = async (miembroId) => {
+        if (!canAssignLeader) {
+            alert('No tienes permisos para designar líder del comité');
+            return;
+        }
+
         const miembro = miembros.find(m => m.id === miembroId);
+        if (!miembro) {
+            alert('No se encontró el miembro seleccionado');
+            return;
+        }
+
         if (confirm(`¿Designar a ${miembro.nombre} como líder del comité?`)) {
-            setMiembros(miembros.map(m => ({
-                ...m,
-                esLider: m.id === miembroId
-            })));
-            alert('Líder designado exitosamente');
+            try {
+                await assignCommitteeLeader(id, miembroId);
+                await loadComiteData();
+                alert('Líder designado exitosamente');
+            } catch (error) {
+                alert(error?.userMessage || error?.message || 'Error al designar líder del comité');
+            }
         }
     };
 
@@ -193,13 +230,15 @@ const GestionComite = () => {
                         <Users size={20} />
                         Miembros del Comité
                     </h3>
-                    <button
-                        onClick={() => setShowAgregarModal(true)}
-                        className="btn-primary flex items-center gap-2"
-                    >
-                        <UserPlus size={18} />
-                        Agregar Miembros
-                    </button>
+                    {canAddMembers && (
+                        <button
+                            onClick={() => setShowAgregarModal(true)}
+                            className="btn-primary flex items-center gap-2"
+                        >
+                            <UserPlus size={18} />
+                            Agregar Miembros
+                        </button>
+                    )}
                 </div>
 
                 <div className="divide-y divide-border">
@@ -227,7 +266,7 @@ const GestionComite = () => {
                                 </div>
                             </div>
                             <div className="flex gap-2">
-                                {!miembro.esLider && (
+                                {!miembro.esLider && canAssignLeader && (
                                     <button
                                         onClick={() => handleDesignarLider(miembro.id)}
                                         className="text-primary hover:text-primary-dark text-sm font-inter"
@@ -235,12 +274,14 @@ const GestionComite = () => {
                                         Designar Líder
                                     </button>
                                 )}
-                                <button
-                                    onClick={() => handleRemoverMiembro(miembro.id)}
-                                    className="text-red-500 hover:text-red-600 text-sm font-inter"
-                                >
-                                    Remover
-                                </button>
+                                {canRemoveMembers && (
+                                    <button
+                                        onClick={() => handleRemoverMiembro(miembro.id)}
+                                        className="text-red-500 hover:text-red-600 text-sm font-inter"
+                                    >
+                                        Remover
+                                    </button>
+                                )}
                             </div>
                         </div>
                     ))}
@@ -254,7 +295,7 @@ const GestionComite = () => {
             </div>
 
             {/* Modal Agregar Miembros */}
-            {showAgregarModal && (
+            {showAgregarModal && canAddMembers && (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
                     <div className="card w-full max-w-md p-6">
                         <h3 className="font-poppins font-bold text-lg text-text-primary mb-4">

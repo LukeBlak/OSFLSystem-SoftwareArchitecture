@@ -30,6 +30,28 @@ import committeeService from '../services/committee.service.js';
 import { ApiError } from '../utils/apiError.js';
 import { ApiResponse } from '../utils/apiResponse.js';
 import { supabaseAdmin } from '../config/supabase.js';
+import { USER_ROLES } from '../models/User.js';
+
+const assertCommitteeAccessForLeader = async (user, committeeId) => {
+  if (String(user?.role || '').toLowerCase() !== USER_ROLES.LIDER_COMITE) {
+    return;
+  }
+
+  const { data: committee, error } = await supabaseAdmin
+    .from('comite')
+    .select('id, lidercomiteid')
+    .eq('id', committeeId)
+    .limit(1)
+    .maybeSingle();
+
+  if (error || !committee) {
+    throw ApiError.notFound('Comité no encontrado');
+  }
+
+  if (committee.lidercomiteid !== user.id) {
+    throw ApiError.forbidden('Solo puedes gestionar tu propio comité');
+  }
+};
 
 const resolveOrganizationIdForUser = async (user) => {
   const direct = user?.organizationId
@@ -333,6 +355,7 @@ export const getAllCommittees = async (req, res, next) => {
     const filters = {
       organizacionId: resolvedOrganizationId,
       estado: estado || null,
+      liderComiteId: req.user?.role === USER_ROLES.LIDER_COMITE ? req.user.id : null,
     };
 
     const pagination = {
@@ -433,6 +456,8 @@ export const getCommitteeById = async (req, res, next) => {
       throw ApiError.badRequest('ID del comité es requerido');
     }
 
+    await assertCommitteeAccessForLeader(req.user, id);
+
     // =========================================================================
     // 3. LLAMAR AL SERVICIO DE OBTENCIÓN POR ID
     // =========================================================================
@@ -457,7 +482,7 @@ export const getCommitteeById = async (req, res, next) => {
             estado: committee.estado,
             presupuestoAsignado: committee.presupuestoAsignado,
             organizacionId: committee.organizacionId,
-            liderComiteId: committee.liderComiteId,
+            liderComiteId: committee.liderComiteId || committee.lidercomiteid || committee.lider_comite_id || null,
             organizacion: committee.organizacion,
             lider: committee.lider,
             proyectos: committee.proyectos,
@@ -749,13 +774,15 @@ export const assignLeader = async (req, res, next) => {
       throw ApiError.badRequest('ID del líder es requerido');
     }
 
-    const allowedRoles = ['admin', 'lider_organizacion'];
-    
+    const allowedRoles = ['admin', 'lider_organizacion', 'lider_comite'];
+
     if (!allowedRoles.includes(req.user.role)) {
       throw ApiError.forbidden(
         'No tienes permisos para asignar líderes a comités'
       );
     }
+
+    await assertCommitteeAccessForLeader(req.user, id);
 
     const committee = await committeeService.assignLeader(supabaseAdmin, id, liderComiteId, {
       assignedBy: req.user.id,
@@ -811,6 +838,8 @@ export const removeMember = async (req, res, next) => {
   try {
     const { id, memberId } = req.params;
 
+    await assertCommitteeAccessForLeader(req.user, id);
+
     await committeeService.removeMemberFromCommittee(supabaseAdmin, id, memberId, {
       removedBy: req.user.id
     });
@@ -864,6 +893,8 @@ export const getCommitteeStats = async (req, res, next) => {
     // 1. EXTRAER ID DE LOS PARÁMETROS
     // =========================================================================
     const { id } = req.params;
+
+    await assertCommitteeAccessForLeader(req.user, id);
 
     // =========================================================================
     // 2. LLAMAR AL SERVICIO DE ESTADÍSTICAS
@@ -962,6 +993,8 @@ export const getCommitteeMembers = async (req, res, next) => {
     const { id: committeeId } = req.params;
     const { page = 1, limit = 10 } = req.query;
 
+    await assertCommitteeAccessForLeader(req.user, committeeId);
+
     // =========================================================================
     // 2. LLAMAR AL SERVICIO
     // =========================================================================
@@ -994,6 +1027,8 @@ export const getCommitteeProjects = async (req, res, next) => {
   try {
     const { id: committeeId } = req.params;
     const { estado, page = 1, limit = 10 } = req.query;
+
+    await assertCommitteeAccessForLeader(req.user, committeeId);
 
     const result = await committeeService.getCommitteeProjects(
       committeeId,

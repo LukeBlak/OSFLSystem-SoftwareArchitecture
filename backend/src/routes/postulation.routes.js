@@ -3,9 +3,26 @@ import * as postulationController from '../controllers/postulation.controller.js
 import { authenticate } from '../middleware/auth.middleware.js';
 import { requireRole } from '../middleware/role.middleware.js';
 import { body } from 'express-validator';
-import { validate } from '../middleware/validation.middleware.js';
+import { validationResult } from 'express-validator';
+import { ApiError } from '../utils/apiError.js';
 
 const router = Router({ mergeParams: true });
+
+const validateRequest = (req, res, next) => {
+  const result = validationResult(req);
+  if (result.isEmpty()) {
+    return next();
+  }
+
+  return next(
+    ApiError.validation('Validacion fallida', {
+      errors: result.array().map((item) => ({
+        field: item.path,
+        message: item.msg,
+      })),
+    })
+  );
+};
 
 router.use(authenticate);
 
@@ -32,7 +49,7 @@ router.patch(
       .withMessage('estado debe ser Aceptada o Rechazada'),
     body('observaciones').optional().trim(),
   ],
-  validate,
+  validateRequest,
   postulationController.updatePostulationStatus
 );
 

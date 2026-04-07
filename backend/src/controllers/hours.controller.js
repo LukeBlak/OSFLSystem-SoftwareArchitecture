@@ -26,7 +26,7 @@ import { StatusCodes } from 'http-status-codes';
 import * as hoursService from '../services/hours.service.js';
 import { ApiError } from '../utils/apiError.js';
 import { ApiResponse } from '../utils/apiResponse.js';
-import { supabase } from '../config/supabase.js';
+import { supabase, supabaseAdmin } from '../config/supabase.js';
 
 // =============================================================================
 // REGISTRAR ASISTENCIA (CU-16)
@@ -217,19 +217,45 @@ export const getHoursReport = async (req, res, next) => {
  */
 export const getMyHoursHistory = async (req, res, next) => {
   try {
-    // Obtener miembroId del usuario autenticado
-    const { data: miembro } = await supabase
-      .from('miembro')
-      .select('id')
-      .eq('email', req.user.email)
-      .maybeSingle();
+    const currentUserId = req.user?.id;
+    const currentUserEmail = req.user?.email;
 
-    if (!miembro) {
+    const memberLookups = [];
+
+    if (currentUserId) {
+      memberLookups.push(
+        supabaseAdmin.from('miembro').select('id').eq('id', currentUserId).maybeSingle()
+      );
+    }
+
+    if (currentUserEmail) {
+      memberLookups.push(
+        supabaseAdmin.from('miembro').select('id').eq('email', currentUserEmail).maybeSingle()
+      );
+
+      const { data: usuarioByEmail } = await supabaseAdmin
+        .from('usuario')
+        .select('id, email')
+        .eq('email', currentUserEmail)
+        .maybeSingle();
+
+      if (usuarioByEmail?.id) {
+        memberLookups.push(
+          supabaseAdmin.from('miembro').select('id').eq('id', usuarioByEmail.id).maybeSingle()
+        );
+      }
+    }
+
+    const resolvedMember = (await Promise.all(memberLookups))
+      .map((result) => result?.data)
+      .find((member) => member?.id);
+
+    if (!resolvedMember?.id) {
       throw ApiError.notFound('Perfil de miembro no encontrado');
     }
 
     const history = await hoursService.getMemberHoursHistory(
-      miembro.id,
+      resolvedMember.id,
       req.query,
       req.user
     );
@@ -238,7 +264,7 @@ export const getMyHoursHistory = async (req, res, next) => {
       new ApiResponse(
         StatusCodes.OK,
         {
-          miembroId: miembro.id,
+          miembroId: resolvedMember.id,
           registros: history.registros,
           resumen: history.resumen,
         },
@@ -266,7 +292,7 @@ export const getHoursHistory = async (req, res, next) => {
     }
 
     const history = await hoursService.getHoursHistory(
-      req.supabase,
+      supabaseAdmin,
       userId
     );
 

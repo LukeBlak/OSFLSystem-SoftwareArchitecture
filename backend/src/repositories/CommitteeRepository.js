@@ -135,6 +135,7 @@ export const CommitteeRepository = {
     let query = supabaseAdmin.from(TABLE).select('*', { count: 'exact' });
 
     if (filters.organizacionId) query = query.eq('organizacionid', filters.organizacionId);
+    if (filters.liderComiteId) query = query.eq('lidercomiteid', filters.liderComiteId);
     if (filters.estado) query = query.eq('estado', filters.estado);
     if (filters.areaResponsabilidad) query = query.eq('arearesponsabilidad', filters.areaResponsabilidad);
     if (filters.search) {

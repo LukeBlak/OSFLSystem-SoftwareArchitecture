@@ -27,6 +27,7 @@ export const ROUTES = {
   '/proyectos/aprobar': [ROLES.LIDER_ORGANIZACION, ROLES.LIDER_COMITE],
   '/proyectos/inscribirse': [
     ROLES.MIEMBRO,
+    ROLES.LIDER_ORGANIZACION,
   ],
 
   '/horas/asistencia': [ROLES.LIDER_COMITE],
@@ -35,7 +36,7 @@ export const ROUTES = {
 
   '/finanzas/ingreso/nuevo': [ROLES.LIDER_ORGANIZACION, ROLES.LIDER_COMITE],
   '/finanzas/egreso/nuevo': [ROLES.LIDER_ORGANIZACION, ROLES.LIDER_COMITE],
-  '/finanzas/caja': [ROLES.ADMIN, ROLES.LIDER_ORGANIZACION, ROLES.LIDER_COMITE, ROLES.MIEMBRO],
+  '/finanzas/caja': [ROLES.ADMIN, ROLES.LIDER_ORGANIZACION, ROLES.MIEMBRO],
   '/finanzas/reportes': [ROLES.LIDER_ORGANIZACION, ROLES.LIDER_COMITE, ROLES.MIEMBRO],
 };
 

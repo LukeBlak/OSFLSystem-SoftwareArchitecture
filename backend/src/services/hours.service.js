@@ -27,9 +27,94 @@ import { ApiError } from '../utils/apiError.js';
 import { StatusCodes } from 'http-status-codes';
 import { logger } from '../utils/logger.js';
 import HoursRepository from '../repositories/HoursRepository.js';
-import { supabase } from '../config/supabase.js';
+import { supabase, supabaseAdmin } from '../config/supabase.js';
 import { USER_ROLES } from '../models/User.js';
 import { HOURS_STATUS } from '../models/Hours.js';
+
+const resolveOrganizationIdForUser = async (currentUser) => {
+  const directOrganizationId = (
+    currentUser?.organizationId
+    || currentUser?.organizacionId
+    || currentUser?.organization_id
+    || currentUser?.organizacion_id
+    || null
+  );
+
+  if (directOrganizationId) {
+    return directOrganizationId;
+  }
+
+  const userId = currentUser?.id;
+  const email = currentUser?.email;
+
+  if (userId) {
+    const { data: liderById, error: liderByIdError } = await supabaseAdmin
+      .from('lider_organizacion')
+      .select('organizacionid')
+      .eq('id', userId)
+      .limit(1)
+      .maybeSingle();
+
+    if (!liderByIdError && liderById?.organizacionid) {
+      return liderById.organizacionid;
+    }
+
+    const { data: committeeAsLeader, error: committeeAsLeaderError } = await supabaseAdmin
+      .from('comite')
+      .select('organizacionid')
+      .eq('lidercomiteid', userId)
+      .limit(1)
+      .maybeSingle();
+
+    if (!committeeAsLeaderError && committeeAsLeader?.organizacionid) {
+      return committeeAsLeader.organizacionid;
+    }
+
+    const { data: memberCommittee, error: memberCommitteeError } = await supabaseAdmin
+      .from('miembro_comite')
+      .select('comiteid')
+      .eq('miembroid', userId)
+      .limit(1)
+      .maybeSingle();
+
+    if (!memberCommitteeError && memberCommittee?.comiteid) {
+      const { data: committeeByMembership, error: committeeByMembershipError } = await supabaseAdmin
+        .from('comite')
+        .select('organizacionid')
+        .eq('id', memberCommittee.comiteid)
+        .limit(1)
+        .maybeSingle();
+
+      if (!committeeByMembershipError && committeeByMembership?.organizacionid) {
+        return committeeByMembership.organizacionid;
+      }
+    }
+  }
+
+  if (email) {
+    const { data: usuarioByEmail, error: usuarioByEmailError } = await supabaseAdmin
+      .from('usuario')
+      .select('id')
+      .eq('email', email)
+      .limit(1)
+      .maybeSingle();
+
+    if (!usuarioByEmailError && usuarioByEmail?.id) {
+      const { data: liderByUsuarioId, error: liderByUsuarioError } = await supabaseAdmin
+        .from('lider_organizacion')
+        .select('organizacionid')
+        .eq('id', usuarioByEmail.id)
+        .limit(1)
+        .maybeSingle();
+
+      if (!liderByUsuarioError && liderByUsuarioId?.organizacionid) {
+        return liderByUsuarioId.organizacionid;
+      }
+    }
+  }
+
+  return null;
+};
 
 // =============================================================================
 // REGISTRAR ASISTENCIA (CU-16)
@@ -69,12 +154,15 @@ export const registerHours = async (supabase, hoursData, currentUser) => {
       throw ApiError.unauthorized('Usuario no autenticado')
     }
 
+    const db = supabaseAdmin || supabase;
+    const currentUserOrganizationId = await resolveOrganizationIdForUser(currentUser);
+
     const horas = Number(cantidadHoras)
     if (isNaN(horas) || horas <= 0) {
       throw ApiError.badRequest('cantidadHoras debe ser un número mayor a 0')
     }
 
-    const { data: miembro, error: miembroError } = await supabase
+    const { data: miembro, error: miembroError } = await db
       .from('miembro')
       .select('id, nombre, email, estadoactivo')
       .eq('id', miembroId)
@@ -84,9 +172,9 @@ export const registerHours = async (supabase, hoursData, currentUser) => {
       throw ApiError.notFound('Miembro no encontrado')
     }
 
-    const { data: proyecto, error: proyectoError } = await supabase
+    const { data: proyecto, error: proyectoError } = await db
       .from('proyecto')
-      .select('id, nombre, estado, fechainicio, fechafin')
+      .select('id, nombre, estado, fechainicio, fechafin, comiteid, organizacionid')
       .eq('id', proyectoId)
       .single()
 
@@ -94,12 +182,34 @@ export const registerHours = async (supabase, hoursData, currentUser) => {
       throw ApiError.notFound('Proyecto no encontrado')
     }
 
-    const { data: postulacion, error: postulacionError } = await supabase
+    if (currentUserOrganizationId) {
+      if (proyecto.organizacionid && proyecto.organizacionid !== currentUserOrganizationId) {
+        throw ApiError.forbidden('El proyecto no pertenece a tu organización')
+      }
+
+      if (proyecto.comiteid) {
+        const { data: committee, error: committeeError } = await db
+          .from('comite')
+          .select('id, organizacionid')
+          .eq('id', proyecto.comiteid)
+          .maybeSingle()
+
+        if (committeeError || !committee) {
+          throw ApiError.notFound('Comité no encontrado para el proyecto')
+        }
+
+        if (committee.organizacionid && committee.organizacionid !== currentUserOrganizationId) {
+          throw ApiError.forbidden('El proyecto no pertenece a tu organización')
+        }
+      }
+    }
+
+    const { data: postulacion, error: postulacionError } = await db
       .from('postulacion')
       .select('id, estado')
       .eq('miembroid', miembroId)
       .eq('proyectoid', proyectoId)
-      .eq('estado', 'aceptada')
+      .eq('estado', 'Aceptada')
       .maybeSingle()
 
     if (postulacionError || !postulacion) {
@@ -120,7 +230,7 @@ export const registerHours = async (supabase, hoursData, currentUser) => {
       throw ApiError.badRequest('La fecha está fuera de la vigencia del proyecto')
     }
 
-    const { data: registroCreado, error: insertError } = await supabase
+    const { data: registroCreado, error: insertError } = await db
       .from('registro_horas')
       .insert([
         {
@@ -185,9 +295,10 @@ export const registerHours = async (supabase, hoursData, currentUser) => {
  */
 export const getHoursHistory = async (supabase, userId) => {
   try {
+    const db = supabaseAdmin || supabase;
     let miembroId = userId;
 
-    const { data: miembroDirecto, error: miembroDirectoError } = await supabase
+    const { data: miembroDirecto, error: miembroDirectoError } = await db
       .from('miembro')
       .select('id, nombre, email, horastotales')
       .eq('id', userId)
@@ -196,7 +307,7 @@ export const getHoursHistory = async (supabase, userId) => {
     let miembro = miembroDirecto;
 
     if (!miembroDirecto) {
-      const { data: usuario, error: usuarioError } = await supabase
+      const { data: usuario, error: usuarioError } = await db
         .from('usuario')
         .select('id, email')
         .eq('id', userId)
@@ -206,7 +317,7 @@ export const getHoursHistory = async (supabase, userId) => {
         throw ApiError.notFound('Usuario no encontrado');
       }
 
-      const { data: miembroPorEmail, error: miembroPorEmailError } = await supabase
+      const { data: miembroPorEmail, error: miembroPorEmailError } = await db
         .from('miembro')
         .select('id, nombre, email, horastotales')
         .eq('email', usuario.email)
@@ -220,7 +331,7 @@ export const getHoursHistory = async (supabase, userId) => {
       miembro = miembroPorEmail;
     }
 
-    const { data: registros, error } = await supabase
+    const { data: registros, error } = await db
       .from('registro_horas')
       .select(`
         id,
@@ -290,16 +401,18 @@ export const getHoursHistory = async (supabase, userId) => {
  */
 export const getMemberHoursHistory = async (miembroId, filters = {}, currentUser) => {
   try {
+    const db = supabaseAdmin || supabase;
+
     // =========================================================================
     // 1. VERIFICAR PERMISOS
     // =========================================================================
     // Miembros solo pueden ver su propio historial
     if (currentUser.role === USER_ROLES.MIEMBRO) {
       // Obtener miembroId del usuario autenticado
-      const { data: miembroAuth } = await supabase
+      const { data: miembroAuth } = await db
         .from('miembro')
         .select('id')
-        .eq('email', currentUser.email)
+        .or(`id.eq.${currentUser.id},email.eq.${currentUser.email}`)
         .maybeSingle();
 
       if (!miembroAuth) {
@@ -314,23 +427,51 @@ export const getMemberHoursHistory = async (miembroId, filters = {}, currentUser
 
     // Líderes de comité solo pueden ver miembros de su comité
     if (currentUser.role === USER_ROLES.LIDER_COMITE) {
-      const { data: liderComite } = await supabase
-        .from('lider_comite')
-        .select('comiteId')
-        .eq('userId', currentUser.id)
-        .maybeSingle();
+      let isLeader = false;
 
-      if (!liderComite) {
+      for (const key of ['id', 'userid', 'user_id']) {
+        if (isLeader) break;
+
+        const { data: leaderById, error: leaderByIdError } = await supabaseAdmin
+          .from('lider_comite')
+          .select('id')
+          .eq(key, currentUser.id)
+          .limit(1)
+          .maybeSingle();
+
+        if (!leaderByIdError && leaderById) {
+          isLeader = true;
+        }
+      }
+
+      if (!isLeader) {
+        for (const key of ['lidercomiteid', 'lider_comite_id', 'lidercomiteId']) {
+          if (isLeader) break;
+
+          const { data: managedCommittee, error: managedCommitteeError } = await supabaseAdmin
+            .from('comite')
+            .select('id')
+            .eq(key, currentUser.id)
+            .limit(1)
+            .maybeSingle();
+
+          if (!managedCommitteeError && managedCommittee) {
+            isLeader = true;
+          }
+        }
+      }
+
+      if (!isLeader) {
         throw ApiError.forbidden('No estás registrado como líder de comité');
       }
 
       // Verificar que el miembro pertenece a un proyecto de su comité
-      const { data: miembroProyecto } = await supabase
+      const { data: miembroProyecto } = await db
         .from('miembro')
         .select(`
           id,
           postulaciones:postulacion(
-            proyecto:proyectoId(comiteId)
+            proyecto:proyectoid(comiteid)
           )
         `)
         .eq('id', miembroId)
@@ -357,36 +498,28 @@ export const getMemberHoursHistory = async (miembroId, filters = {}, currentUser
     // =========================================================================
     // 3. CONSULTAR REGISTROS
     // =========================================================================
-    let query = supabase
+    let query = db
       .from('registro_horas')
       .select(`
         *,
-        miembro:miembroId (
+        miembro:miembroid (
           id,
           nombre,
           email,
           dui
         ),
-        proyecto:proyectoId (
+        proyecto:proyectoid (
           id,
           nombre,
           estado,
-          comite:comiteId (nombre)
-        ),
-        validador:validadoPor (
-          email,
-          profile:usuario(nombre)
+          comite:comiteid (nombre)
         )
       `, { count: 'exact' })
-      .eq('miembroId', miembroId);
+      .eq('miembroid', miembroId);
 
     // Aplicar filtros adicionales
     if (proyectoId) {
-      query = query.eq('proyectoId', proyectoId);
-    }
-
-    if (estado) {
-      query = query.eq('estado', estado);
+      query = query.eq('proyectoid', proyectoId);
     }
 
     if (fechaDesde) {
@@ -406,6 +539,23 @@ export const getMemberHoursHistory = async (miembroId, filters = {}, currentUser
       throw ApiError.internal('Error al consultar el historial de horas');
     }
 
+    const normalizedRecords = (registros || []).map((record) => {
+      const isValidated = Boolean(record.validado);
+      const isApproved = Boolean(record.aprobado);
+      const estadoCalculado = isValidated
+        ? (isApproved ? 'validada' : 'rechazada')
+        : 'pendiente';
+
+      return {
+        ...record,
+        estado: record.estado || estadoCalculado,
+      };
+    });
+
+    const scopedRecords = estado
+      ? normalizedRecords.filter((record) => String(record.estado).toLowerCase() === String(estado).toLowerCase())
+      : normalizedRecords;
+
     // =========================================================================
     // 4. CALCULAR TOTALES
     // =========================================================================
@@ -416,20 +566,20 @@ export const getMemberHoursHistory = async (miembroId, filters = {}, currentUser
     }
 
     // Calcular horas por estado
-    const horasValidadas = registros
+    const horasValidadas = scopedRecords
       ?.filter(r => r.estado === 'validada')
-      .reduce((sum, r) => sum + (parseFloat(r.cantidadHoras) || 0), 0) || 0;
+      .reduce((sum, r) => sum + (parseFloat(r.cantidadHoras ?? r.cantidadhoras) || 0), 0) || 0;
 
-    const horasPendientes = registros
+    const horasPendientes = scopedRecords
       ?.filter(r => r.estado === 'pendiente')
-      .reduce((sum, r) => sum + (parseFloat(r.cantidadHoras) || 0), 0) || 0;
+      .reduce((sum, r) => sum + (parseFloat(r.cantidadHoras ?? r.cantidadhoras) || 0), 0) || 0;
 
     // =========================================================================
     // 5. RETORNAR RESULTADO
     // =========================================================================
     return {
       miembroId,
-      registros: registros || [],
+      registros: scopedRecords,
       resumen: {
         horasTotales: horasTotales,
         horasValidadas: horasValidadas,

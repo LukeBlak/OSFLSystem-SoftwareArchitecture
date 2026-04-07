@@ -664,6 +664,12 @@ export const assignLeader = async (supabase, committeeId, liderComiteId, options
       throw ApiError.notFound('Comité no encontrado');
     }
 
+    const areaResponsabilidad =
+      options.areaResponsabilidad ??
+      committee.arearesponsabilidad ??
+      committee.areaResponsabilidad ??
+      null;
+
     // 2. VERIFICAR QUE EL MIEMBRO EXISTE
     const { data: lider, error: liderError } = await supabase
       .from('miembro')
@@ -679,17 +685,24 @@ export const assignLeader = async (supabase, committeeId, liderComiteId, options
     // La tabla comite requiere que lidercomiteid sea un FK a lider_comite(id)
     const { data: isLider, error: checkLiderError } = await supabase
       .from('lider_comite')
-      .select('id')
+      .select('id, arearesponsabilidad')
       .eq('id', liderComiteId)
       .single();
 
     if (!isLider) {
-      // Inyectar al miembro en la tabla lider_comite
+      // Inyectar al miembro en la tabla lider_comite con su área de responsabilidad
       const { error: insertLider } = await supabase
         .from('lider_comite')
-        .insert([{ id: liderComiteId }]);
+        .insert([{ id: liderComiteId, arearesponsabilidad: areaResponsabilidad }]);
         
       if (insertLider) throw ApiError.internal('Error al promover miembro a líder de comité');
+    } else if ((isLider.arearesponsabilidad ?? null) !== areaResponsabilidad) {
+      const { error: updateLider } = await supabase
+        .from('lider_comite')
+        .update({ arearesponsabilidad: areaResponsabilidad })
+        .eq('id', liderComiteId);
+
+      if (updateLider) throw ApiError.internal('Error al actualizar el área de responsabilidad del líder');
     }
 
     // 4. ACTUALIZAR LÍDER DEL COMITÉ

@@ -279,7 +279,9 @@ const Dashboard = () => {
 
   const visibleStatsCards = role === 'miembro'
     ? statsCards.filter((stat) => stat.title === 'Proyectos Activos')
-    : statsCards;
+    : role === 'lider_comite'
+      ? statsCards.filter((stat) => stat.title !== 'Saldo en Caja')
+      : statsCards;
 
   return (
     <div className="min-h-screen bg-[#f8faf9]">

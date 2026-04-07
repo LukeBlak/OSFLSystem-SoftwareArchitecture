@@ -1,5 +1,6 @@
 import { ApiError } from '../utils/apiError.js';
 import { logger } from '../utils/logger.js';
+import { supabaseAdmin } from '../config/supabase.js';
 
 // ---------------------------------------------------------------------------
 // CU-14 — Postularse a proyecto
@@ -8,7 +9,8 @@ import { logger } from '../utils/logger.js';
 export const createPostulation = async (supabase, miembroId, proyectoId) => {
   try {
     // a) Buscar proyecto
-    const { data: proyecto, error: proyectoError } = await supabase
+    const db = supabaseAdmin || supabase;
+    const { data: proyecto, error: proyectoError } = await db
       .from('proyecto')
       .select('*')
       .eq('id', proyectoId)
@@ -18,12 +20,25 @@ export const createPostulation = async (supabase, miembroId, proyectoId) => {
     if (proyectoError || !proyecto) throw ApiError.notFound('Proyecto no encontrado');
 
     // c) Verificar estado
-    if (proyecto.estado !== 'Convocatoria') {
-      throw ApiError.badRequest('El proyecto no está en fase de convocatoria');
+    const estadoProyecto = String(proyecto.estado || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/\s+/g, '_');
+
+    const openForPostulationStates = [
+      'en_ejecucion',
+      'ejecucion',
+      'planificacion',
+      'convocatoria',
+    ];
+
+    if (!openForPostulationStates.includes(estadoProyecto)) {
+      throw ApiError.badRequest('El proyecto no está habilitado para postulación');
     }
 
     // d) Contar aceptadas
-    const { count, error: countError } = await supabase
+    const { count, error: countError } = await db
       .from('postulacion')
       .select('*', { count: 'exact', head: true })
       .eq('proyectoid', proyectoId)
@@ -37,7 +52,7 @@ export const createPostulation = async (supabase, miembroId, proyectoId) => {
     }
 
     // f) Verificar postulacion duplicada
-    const { data: existing } = await supabase
+    const { data: existing } = await db
       .from('postulacion')
       .select('id')
       .eq('miembroid', miembroId)
@@ -48,7 +63,7 @@ export const createPostulation = async (supabase, miembroId, proyectoId) => {
     if (existing) throw ApiError.conflict('Ya te has postulado a este proyecto');
 
     // h) Insertar (estado pendiente por defecto o via db)
-    const { data: postulacion, error: insertError } = await supabase
+    const { data: postulacion, error: insertError } = await db
       .from('postulacion')
       .insert({ miembroid: miembroId, proyectoid: proyectoId, estado: 'Pendiente' })
       .select()
@@ -69,7 +84,8 @@ export const createPostulation = async (supabase, miembroId, proyectoId) => {
 
 export const getMyPostulations = async (supabase, miembroId) => {
   try {
-    const { data, error } = await supabase
+    const db = supabaseAdmin || supabase;
+    const { data, error } = await db
       .from('postulacion')
       .select('id, estado, fechapostulacion, proyecto(nombre, estado, fechainicio, fechafin)')
       .eq('miembroid', miembroId)
@@ -88,7 +104,8 @@ export const getMyPostulations = async (supabase, miembroId) => {
 
 export const getPostulationsByProject = async (supabase, proyectoId) => {
   try {
-    const { data, error } = await supabase
+    const db = supabaseAdmin || supabase;
+    const { data, error } = await db
       .from('postulacion')
       .select('id, estado, fechapostulacion, observaciones, miembro(*)')
       .eq('proyectoid', proyectoId)
@@ -112,14 +129,27 @@ export const getPostulationsByProject = async (supabase, proyectoId) => {
 export const updatePostulationStatus = async (supabase, postulacionId, { estado, observaciones }) => {
   try {
     // a) Validar estado permitido
-    if (!['Aceptada', 'Rechazada'].includes(estado)) {
+    const normalizedEstado = String(estado || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim()
+      .toLowerCase();
+
+    const estadoCanonical = normalizedEstado === 'aceptada'
+      ? 'Aceptada'
+      : normalizedEstado === 'rechazada'
+        ? 'Rechazada'
+        : null;
+
+    if (!estadoCanonical) {
       throw ApiError.badRequest('Estado debe ser Aceptada o Rechazada');
     }
 
-    // b) Buscar postulacion y cupos de su proyecto
-    const { data: postulacion, error: fetchError } = await supabase
+    // b) Buscar postulacion
+    const db = supabaseAdmin || supabase;
+    const { data: postulacion, error: fetchError } = await db
       .from('postulacion')
-      .select('*, proyecto!inner(cupos)')
+      .select('id, estado, proyectoid')
       .eq('id', postulacionId)
       .single();
 
@@ -127,13 +157,30 @@ export const updatePostulationStatus = async (supabase, postulacionId, { estado,
     if (fetchError || !postulacion) throw ApiError.notFound('Postulación no encontrada');
 
     // d) Solo se gestionan pendientes
-    if (postulacion.estado !== 'Pendiente') {
+    const estadoActual = String(postulacion.estado || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim()
+      .toLowerCase();
+
+    if (estadoActual !== 'pendiente') {
       throw ApiError.conflict('Solo se pueden gestionar postulaciones Pendientes');
     }
 
     // e) Si Aceptada, verificar cupos nuevamente
-    if (estado === 'Aceptada') {
-      const { count, error: countError } = await supabase
+    // c) Buscar proyecto para validar cupos
+    const { data: proyecto, error: proyectoError } = await db
+      .from('proyecto')
+      .select('id, cupos')
+      .eq('id', postulacion.proyectoid)
+      .single();
+
+    if (proyectoError || !proyecto) {
+      throw ApiError.notFound('Proyecto no encontrado para la postulación');
+    }
+
+    if (estadoCanonical === 'Aceptada') {
+      const { count, error: countError } = await db
         .from('postulacion')
         .select('*', { count: 'exact', head: true })
         .eq('proyectoid', postulacion.proyectoid)
@@ -141,16 +188,17 @@ export const updatePostulationStatus = async (supabase, postulacionId, { estado,
 
       if (countError) throw ApiError.internal('Error al verificar cupos del proyecto');
 
-      if (count >= postulacion.proyecto.cupos) {
+      if (count >= proyecto.cupos) {
         throw ApiError.conflict('No hay cupos disponibles para aceptar esta postulación');
       }
     }
 
     // f) Actualizar
-    const { data: updated, error: updateError } = await supabase
+    const { data: updated, error: updateError } = await db
       .from('postulacion')
       .update({
-        estado,
+        estado: estadoCanonical,
+        fechaaprobacion: estadoCanonical === 'Aceptada' ? new Date().toISOString() : null,
         observaciones: observaciones ?? null,
       })
       .eq('id', postulacionId)

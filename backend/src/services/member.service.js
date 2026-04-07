@@ -105,6 +105,37 @@ const resolveOrganizationIdForUser = async (currentUser) => {
     if (!liderByIdError && liderById?.organizacionid) {
       return liderById.organizacionid;
     }
+
+    const { data: committeeAsLeader, error: committeeAsLeaderError } = await supabaseAdmin
+      .from('comite')
+      .select('organizacionid')
+      .eq('lidercomiteid', userId)
+      .limit(1)
+      .maybeSingle();
+
+    if (!committeeAsLeaderError && committeeAsLeader?.organizacionid) {
+      return committeeAsLeader.organizacionid;
+    }
+
+    const { data: memberCommittee, error: memberCommitteeError } = await supabaseAdmin
+      .from('miembro_comite')
+      .select('comiteid')
+      .eq('miembroid', userId)
+      .limit(1)
+      .maybeSingle();
+
+    if (!memberCommitteeError && memberCommittee?.comiteid) {
+      const { data: committeeByMembership, error: committeeByMembershipError } = await supabaseAdmin
+        .from('comite')
+        .select('organizacionid')
+        .eq('id', memberCommittee.comiteid)
+        .limit(1)
+        .maybeSingle();
+
+      if (!committeeByMembershipError && committeeByMembership?.organizacionid) {
+        return committeeByMembership.organizacionid;
+      }
+    }
   }
 
   if (email) {

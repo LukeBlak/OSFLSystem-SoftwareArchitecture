@@ -8,6 +8,7 @@ import {
   validateProject,
   assignCommitteeValidator,
 } from '../validators/project.validator.js';
+import { body } from 'express-validator';
 
 const router = Router();
 
@@ -51,6 +52,16 @@ router.patch(
   assignCommitteeValidator,
   validateRequest,
   projectController.assignCommittee
+);
+
+router.patch(
+  '/:id/status',
+  requireRole(['lider_organizacion']),
+  [
+    body('estado').notEmpty().withMessage('estado es requerido'),
+  ],
+  validateRequest,
+  projectController.updateProjectStatus
 );
 
 export default router;

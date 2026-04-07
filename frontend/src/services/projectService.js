@@ -23,10 +23,15 @@ export const assignCommittee = (projectId, comiteId) => apiClient.patch(`/projec
   comiteId,
 });
 
+export const updateProjectStatus = (projectId, estado) => apiClient.patch(`/projects/${projectId}/status`, {
+  estado,
+});
+
 export default {
   getProjects,
   getProjectById,
   createProject,
   updateProject,
+  updateProjectStatus,
   assignCommittee,
 };

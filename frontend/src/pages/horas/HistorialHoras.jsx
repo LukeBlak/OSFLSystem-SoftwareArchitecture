@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import NavbarInner from '../../components/NavbarInner';
 import { Clock, Calendar, FolderKanban, Award, TrendingUp, Download, User, CheckCircle, BarChart3, FileText } from 'lucide-react';
-import { getHoursHistory } from '../../services/hoursService';
+import { getMyHistory } from '../../services/hoursService';
 import authService from '../../services/authService';
 
 const normalizeHistory = (response) => {
@@ -57,13 +57,11 @@ const HistorialHoras = () => {
     setLoading(true);
     setError('');
     try {
-      const userId = currentUser?.id;
-
-      if (!userId) {
+      if (!currentUser?.id) {
         throw new Error('No se pudo identificar el usuario actual');
       }
       
-      const response = await getHoursHistory(userId, { limit: 100 });
+      const response = await getMyHistory({ limit: 100 });
       const payload = normalizeHistory(response);
 
       setMemberInfo(payload.member || {

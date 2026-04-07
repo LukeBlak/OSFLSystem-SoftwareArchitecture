@@ -136,6 +136,11 @@ const canManageCommittees = [
   requireRole([ROLES.LIDER_ORGANIZACION]),
 ];
 
+const canManageCommitteeMembers = [
+  authenticate,
+  requireRole([ROLES.LIDER_ORGANIZACION, ROLES.LIDER_COMITE]),
+];
+
 /**
  * Middleware para verificar permisos de lectura de comités
  * 
@@ -564,7 +569,7 @@ router.post(
  */
 router.delete(
   '/:id/members/:memberId',
-  canManageCommittees,
+  canManageCommitteeMembers,
   writeCommitteeLimiter,
   validate(committeeIdSchema, { source: 'params' }),
   committeeController.removeMember
