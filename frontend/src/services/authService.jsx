@@ -58,10 +58,19 @@ const getUser = () => {
       || null
     );
 
+    const isActive = (
+      typeof parsed.isActive === 'boolean'
+        ? parsed.isActive
+        : typeof parsed.estadoActivo === 'boolean'
+          ? parsed.estadoActivo
+          : true
+    );
+
     return {
       ...parsed,
       role: String(role).toLowerCase(),
       organizationId,
+      isActive,
     };
   } catch {
     return null;
@@ -190,10 +199,18 @@ const checkSession = async () => {
 /**
  * Helper: obtiene headers de autenticación para otras peticiones
  */
-const authHeaders = () => ({
-  'Content-Type': 'application/json',
-  Authorization: `Bearer ${getToken()}`,
-});
+const authHeaders = () => {
+  const token = getToken();
+  const headers = {
+    'Content-Type': 'application/json',
+  };
+
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  return headers;
+};
 
 // ─── Redirección según rol ───────────────────────────────────────────────────
 

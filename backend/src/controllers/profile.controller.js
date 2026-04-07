@@ -552,7 +552,7 @@ export const changePassword = async (req, res, next) => {
     // - Validar contraseña actual (comparar hash)
     // - Hashear nueva contraseña
     // - Actualizar en Supabase Auth
-    await profileService.changePassword(userId, currentPassword, newPassword);
+    await profileService.changePassword(userId, req.user.email, currentPassword, newPassword);
 
     // =========================================================================
     // 7. RETORNAR RESPUESTA EXITOSA
