@@ -1,307 +1,231 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
-import Navbar from '../../components/Navbar';
-import { Building2, Mail, Phone, MapPin, ArrowLeft, Loader } from 'lucide-react';
+import React, { useState } from 'react';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+const RegisterOrganization = () => {
+  // Estado inicial del formulario basado en los campos del controlador
+  const [formData, setFormData] = useState({
+    nombre: '',
+    tipo: 'ONG', // Valor por defecto según el servicio
+    descripcion: '',
+    direccion: '',
+    telefono: '',
+    email: '',
+  });
 
-const RegistroOrganizacion = () => {
-    const navigate = useNavigate();
-    const { id } = useParams();
-    const isEditing = !!id;
+  const [loading, setLoading] = useState(false);
+  const [status, setStatus] = useState({ type: '', message: '' });
 
-    const [formData, setFormData] = useState({
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setStatus({ type: '', message: '' });
+
+    try {
+      const response = await fetch('/api/organizations', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}` // Ejemplo de recuperación de token
+        },
+        body: JSON.stringify(formData),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.message || 'Error al registrar la organización');
+      }
+
+      setStatus({
+        type: 'success',
+        message: result.message || 'Organización registrada exitosamente',
+      });
+      
+      // Limpiar formulario tras éxito
+      setFormData({
         nombre: '',
         tipo: 'ONG',
         descripcion: '',
         direccion: '',
         telefono: '',
-        email: ''
-    });
+        email: '',
+      });
 
-    const [errors, setErrors] = useState({});
-    const [loading, setLoading] = useState(false);
-    const [pageLoading, setPageLoading] = useState(isEditing);
-
-    useEffect(() => {
-        if (isEditing) {
-            loadOrganizationData();
-        }
-    }, [id]);
-
-    const loadOrganizationData = async () => {
-        try {
-            const response = await fetch(`${API_URL}/organizations/${id}`, {
-                headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`
-                }
-            });
-
-            if (!response.ok) {
-                throw new Error('Error al cargar los datos de la organización');
-            }
-
-            const data = await response.json();
-            const org = data.data?.organization || data.data;
-            setFormData({
-                nombre: org.nombre || '',
-                tipo: org.tipo || 'ONG',
-                descripcion: org.descripcion || '',
-                direccion: org.direccion || '',
-                telefono: org.telefono || '',
-                email: org.email || ''
-            });
-        } catch (error) {
-            alert('Error: ' + error.message);
-            navigate('/admin/organizaciones');
-        } finally {
-            setPageLoading(false);
-        }
-    };
-
-    const handleChange = (e) => {
-        const { name, value } = e.target;
-        setFormData(prev => ({ ...prev, [name]: value }));
-        if (errors[name]) {
-            setErrors(prev => ({ ...prev, [name]: '' }));
-        }
-    };
-
-    const validate = () => {
-        const newErrors = {};
-        if (!formData.nombre.trim()) {
-            newErrors.nombre = 'El nombre es obligatorio';
-        }
-        if (!formData.descripcion.trim()) {
-            newErrors.descripcion = 'La descripción es obligatoria';
-        }
-        if (!formData.direccion.trim()) {
-            newErrors.direccion = 'La dirección es obligatoria';
-        }
-        if (!formData.telefono.trim()) {
-            newErrors.telefono = 'El teléfono es obligatorio';
-        }
-        if (!formData.email.trim() || !/\S+@\S+\.\S+/.test(formData.email)) {
-            newErrors.email = 'Ingrese un correo válido';
-        }
-        setErrors(newErrors);
-        return Object.keys(newErrors).length === 0;
-    };
-
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        if (!validate()) return;
-
-        setLoading(true);
-        try {
-            const method = isEditing ? 'PUT' : 'POST';
-            const url = isEditing ? `${API_URL}/organizations/${id}` : `${API_URL}/organizations`;
-
-            const response = await fetch(url, {
-                method,
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`
-                },
-                body: JSON.stringify(formData)
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.message || 'Error en la operación');
-            }
-
-            const message = isEditing 
-                ? 'Organización actualizada exitosamente'
-                : 'Organización registrada exitosamente';
-            
-            alert(message);
-            navigate('/admin/organizaciones');
-        } catch (error) {
-            alert('Error: ' + error.message);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    if (pageLoading) {
-        return (
-            <div className="min-h-screen bg-[#f8faf9]">
-                <Navbar />
-                <main className="container mx-auto px-6 pt-28 pb-12">
-                    <div className="flex items-center justify-center py-12">
-                        <Loader className="animate-spin text-[#0d9488]" size={32} />
-                    </div>
-                </main>
-            </div>
-        );
+    } catch (error) {
+      setStatus({
+        type: 'error',
+        message: error.message,
+      });
+    } finally {
+      setLoading(false);
     }
+  };
 
-    return (
-        <div className="min-h-screen bg-[#f8faf9]">
-            <Navbar />
-
-            <main className="container mx-auto px-6 pt-28 pb-12 max-w-3xl">
-                {/* Back Button */}
-                <button
-                    onClick={() => navigate('/admin/organizaciones')}
-                    className="flex items-center gap-2 text-[#0d9488] hover:text-[#0a7a73] mb-6 font-inter font-semibold"
-                >
-                    <ArrowLeft size={18} />
-                    Volver
-                </button>
-
-                {/* Header */}
-                <div className="mb-8">
-                    <h2 className="font-poppins font-bold text-2xl text-text-primary mb-2">
-                        {isEditing ? 'Editar Organización' : 'Registrar Nueva Organización'}
-                    </h2>
-                    <p className="font-inter text-text-secondary">
-                        {isEditing 
-                            ? 'Actualiza los datos de la organización'
-                            : 'Complete los datos de la nueva organización'}
-                    </p>
-                </div>
-
-                {/* Form */}
-                <form onSubmit={handleSubmit} className="card p-8">
-                    <div className="space-y-6">
-                        {/* Nombre */}
-                        <div>
-                            <label className="block text-text-primary font-inter font-semibold mb-2">
-                                Nombre *
-                            </label>
-                            <div className="relative">
-                                <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary" size={18} />
-                                <input
-                                    type="text"
-                                    name="nombre"
-                                    value={formData.nombre}
-                                    onChange={handleChange}
-                                    className={`input-field pl-10 ${errors.nombre ? 'border-red-500' : ''}`}
-                                    placeholder="Ej: Fundación Esperanza"
-                                />
-                            </div>
-                            {errors.nombre && <p className="mt-1 text-sm text-red-500">{errors.nombre}</p>}
-                        </div>
-
-                        {/* Tipo */}
-                        <div>
-                            <label className="block text-text-primary font-inter font-semibold mb-2">
-                                Tipo de Organización
-                            </label>
-                            <select
-                                name="tipo"
-                                value={formData.tipo}
-                                onChange={handleChange}
-                                className="input-field"
-                            >
-                                <option value="ONG">ONG</option>
-                                <option value="asociacion">Asociación</option>
-                                <option value="fundacion">Fundación</option>
-                                <option value="cooperativa">Cooperativa</option>
-                            </select>
-                        </div>
-
-                        {/* Descripción */}
-                        <div>
-                            <label className="block text-text-primary font-inter font-semibold mb-2">
-                                Descripción *
-                            </label>
-                            <textarea
-                                name="descripcion"
-                                value={formData.descripcion}
-                                onChange={handleChange}
-                                rows="4"
-                                className={`input-field ${errors.descripcion ? 'border-red-500' : ''}`}
-                                placeholder="Describa la misión y objetivos de la organización..."
-                            />
-                            {errors.descripcion && <p className="mt-1 text-sm text-red-500">{errors.descripcion}</p>}
-                        </div>
-
-                        {/* Dirección */}
-                        <div>
-                            <label className="block text-text-primary font-inter font-semibold mb-2">
-                                Dirección *
-                            </label>
-                            <div className="relative">
-                                <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary" size={18} />
-                                <input
-                                    type="text"
-                                    name="direccion"
-                                    value={formData.direccion}
-                                    onChange={handleChange}
-                                    className={`input-field pl-10 ${errors.direccion ? 'border-red-500' : ''}`}
-                                    placeholder="Dirección física completa"
-                                />
-                            </div>
-                            {errors.direccion && <p className="mt-1 text-sm text-red-500">{errors.direccion}</p>}
-                        </div>
-
-                        {/* Teléfono */}
-                        <div>
-                            <label className="block text-text-primary font-inter font-semibold mb-2">
-                                Teléfono *
-                            </label>
-                            <div className="relative">
-                                <Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary" size={18} />
-                                <input
-                                    type="tel"
-                                    name="telefono"
-                                    value={formData.telefono}
-                                    onChange={handleChange}
-                                    className={`input-field pl-10 ${errors.telefono ? 'border-red-500' : ''}`}
-                                    placeholder="7000-0000"
-                                />
-                            </div>
-                            {errors.telefono && <p className="mt-1 text-sm text-red-500">{errors.telefono}</p>}
-                        </div>
-
-                        {/* Email */}
-                        <div>
-                            <label className="block text-text-primary font-inter font-semibold mb-2">
-                                Email *
-                            </label>
-                            <div className="relative">
-                                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary" size={18} />
-                                <input
-                                    type="email"
-                                    name="email"
-                                    value={formData.email}
-                                    onChange={handleChange}
-                                    className={`input-field pl-10 ${errors.email ? 'border-red-500' : ''}`}
-                                    placeholder="contacto@organizacion.org"
-                                />
-                            </div>
-                            {errors.email && <p className="mt-1 text-sm text-red-500">{errors.email}</p>}
-                        </div>
-                    </div>
-
-                    {/* Buttons */}
-                    <div className="mt-8 flex gap-4">
-                        <button
-                            type="button"
-                            onClick={() => navigate('/admin/organizaciones')}
-                            className="flex-1 px-4 py-3 border border-gray-300 rounded-lg hover:bg-gray-50
-                                     transition-colors font-inter font-semibold text-text-primary"
-                        >
-                            Cancelar
-                        </button>
-                        <button
-                            type="submit"
-                            disabled={loading}
-                            className="flex-1 px-4 py-3 bg-[#0d9488] text-white rounded-lg hover:bg-[#0a7a73]
-                                     transition-colors font-inter font-semibold disabled:opacity-50 disabled:cursor-not-allowed
-                                     flex items-center justify-center gap-2"
-                        >
-                            {loading && <Loader size={18} className="animate-spin" />}
-                            {loading ? 'Guardando...' : (isEditing ? 'Actualizar' : 'Registrar')}
-                        </button>
-                    </div>
-                </form>
-            </main>
+  return (
+    <div className="min-h-screen bg-[#F8FAF9] py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-3xl mx-auto">
+        {/* Encabezado */}
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-[#1F2937] font-poppins">
+            Registrar Organización
+          </h1>
+          <p className="mt-2 text-[#64748B] font-inter">
+            Crear un nuevo perfil institucional en el sistema.
+          </p>
         </div>
-    );
+
+        {/* Card del Formulario */}
+        <div className="bg-white rounded-xl shadow-sm border border-[#E2E8F0] overflow-hidden">
+          <form onSubmit={handleSubmit} className="p-8 space-y-6">
+            
+            {/* Mensajes de Feedback */}
+            {status.message && (
+              <div className={`p-4 rounded-lg font-inter text-sm ${
+                status.type === 'success' 
+                ? 'bg-[#DCECE7] text-[#16A34A] border border-[#22C55E]/20' 
+                : 'bg-red-50 text-red-600 border border-red-100'
+              }`}>
+                {status.message}
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Nombre - Requerido */}
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-[#1F2937] font-poppins mb-1">
+                  Nombre de la Organización *
+                </label>
+                <input
+                  type="text"
+                  name="nombre"
+                  required
+                  value={formData.nombre}
+                  onChange={handleChange}
+                  placeholder="Ej. Asociación de Voluntarios"
+                  className="w-full px-4 py-2 border border-[#E2E8F0] rounded-lg focus:ring-2 focus:ring-[#22C55E] focus:border-transparent outline-none font-inter text-[#1F2937] transition-all"
+                />
+              </div>
+
+              {/* Tipo */}
+              <div>
+                <label className="block text-sm font-medium text-[#1F2937] font-poppins mb-1">
+                  Tipo
+                </label>
+                <select
+                  name="tipo"
+                  value={formData.tipo}
+                  onChange={handleChange}
+                  className="w-full px-4 py-2 border border-[#E2E8F0] rounded-lg focus:ring-2 focus:ring-[#38BDF8] focus:border-transparent outline-none font-inter text-[#1F2937] bg-white transition-all"
+                >
+                  <option value="ONG">ONG</option>
+                  <option value="Asociación">Asociación</option>
+                  <option value="Fundación">Fundación</option>
+                  <option value="Cooperativa">Cooperativa</option>
+                </select>
+              </div>
+
+              {/* Email */}
+              <div>
+                <label className="block text-sm font-medium text-[#1F2937] font-poppins mb-1">
+                  Correo Electrónico
+                </label>
+                <input
+                  type="email"
+                  name="email"
+                  value={formData.email}
+                  onChange={handleChange}
+                  placeholder="contacto@organizacion.org"
+                  className="w-full px-4 py-2 border border-[#E2E8F0] rounded-lg focus:ring-2 focus:ring-[#38BDF8] focus:border-transparent outline-none font-inter text-[#1F2937] transition-all"
+                />
+              </div>
+
+              {/* Teléfono */}
+              <div>
+                <label className="block text-sm font-medium text-[#1F2937] font-poppins mb-1">
+                  Teléfono
+                </label>
+                <input
+                  type="text"
+                  name="telefono"
+                  value={formData.telefono}
+                  onChange={handleChange}
+                  placeholder="+503 2222-0000"
+                  className="w-full px-4 py-2 border border-[#E2E8F0] rounded-lg focus:ring-2 focus:ring-[#38BDF8] focus:border-transparent outline-none font-inter text-[#1F2937] transition-all"
+                />
+              </div>
+
+              {/* Dirección */}
+              <div>
+                <label className="block text-sm font-medium text-[#1F2937] font-poppins mb-1">
+                  Dirección
+                </label>
+                <input
+                  type="text"
+                  name="direccion"
+                  value={formData.direccion}
+                  onChange={handleChange}
+                  placeholder="Calle Principal #123"
+                  className="w-full px-4 py-2 border border-[#E2E8F0] rounded-lg focus:ring-2 focus:ring-[#38BDF8] focus:border-transparent outline-none font-inter text-[#1F2937] transition-all"
+                />
+              </div>
+
+              {/* Descripción */}
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-[#1F2937] font-poppins mb-1">
+                  Descripción
+                </label>
+                <textarea
+                  name="descripcion"
+                  rows="4"
+                  value={formData.descripcion}
+                  onChange={handleChange}
+                  placeholder="Describe la misión y visión de la organización..."
+                  className="w-full px-4 py-2 border border-[#E2E8F0] rounded-lg focus:ring-2 focus:ring-[#38BDF8] focus:border-transparent outline-none font-inter text-[#1F2937] transition-all resize-none"
+                ></textarea>
+              </div>
+            </div>
+
+            {/* Acciones */}
+            <div className="pt-4 flex items-center justify-end space-x-4">
+              <button
+                type="button"
+                className="px-6 py-2 border border-[#E2E8F0] text-[#64748B] rounded-lg hover:bg-gray-50 font-poppins font-medium transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={loading}
+                className={`px-8 py-2 bg-[#22C55E] hover:bg-[#16A34A] text-[#FFFFFF] rounded-lg font-poppins font-semibold transition-all shadow-md active:transform active:scale-95 flex items-center ${
+                  loading ? 'opacity-70 cursor-not-allowed' : ''
+                }`}
+              >
+                {loading ? (
+                  <>
+                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Procesando...
+                  </>
+                ) : (
+                  'Registrar Organización'
+                )}
+              </button>
+            </div>
+          </form>
+        </div>
+        
+      </div>
+    </div>
+  );
 };
 
-export default RegistroOrganizacion;
+export default RegisterOrganization;
